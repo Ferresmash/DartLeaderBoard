@@ -78,7 +78,11 @@ export default function MatchDetail({ matches, players }) {
             <p className="text-indigo-400 font-bold uppercase tracking-widest text-sm mb-3">Match Winner</p>
             {winner && (
               <>
-                <img src={winner.pfpUrl} alt={winner.name} className="w-20 h-20 rounded-full border-4 border-indigo-400 shadow-xl mb-3 object-cover" />
+                {winner.pfpUrl ? (
+                  <img src={winner.pfpUrl} alt={winner.name} className="w-20 h-20 rounded-full border-4 border-indigo-400 shadow-xl mb-3 object-cover shrink-0" />
+                ) : (
+                  <div className="w-20 h-20 rounded-full border-4 border-indigo-400 bg-slate-800 flex items-center justify-center font-black text-slate-300 uppercase text-2xl mb-3 shadow-xl shrink-0">{winner.name.substring(0,2)}</div>
+                )}
                 <h2 className="text-2xl font-black text-white">{winner.name}</h2>
               </>
             )}
@@ -92,7 +96,11 @@ export default function MatchDetail({ matches, players }) {
             <p className="text-amber-400 font-bold uppercase tracking-widest text-sm mb-3">Highest Score Recorded</p>
             {highestScorer && highestScore > -1 ? (
               <>
-                <img src={highestScorer.pfpUrl} alt={highestScorer.name} className="w-20 h-20 rounded-full border-4 border-amber-400 shadow-xl mb-3 object-cover" />
+                {highestScorer.pfpUrl ? (
+                  <img src={highestScorer.pfpUrl} alt={highestScorer.name} className="w-20 h-20 rounded-full border-4 border-amber-400 shadow-xl mb-3 object-cover shrink-0" />
+                ) : (
+                  <div className="w-20 h-20 rounded-full border-4 border-amber-400 bg-slate-800 flex items-center justify-center font-black text-slate-300 uppercase text-2xl mb-3 shadow-xl shrink-0">{highestScorer.name.substring(0,2)}</div>
+                )}
                 <h2 className="text-2xl font-black text-white mb-1">{highestScorer.name}</h2>
                 <span className="text-4xl font-black text-amber-300 drop-shadow-md">{highestScore}</span>
               </>

@@ -174,7 +174,9 @@ export default function Play({ onMatchComplete }) {
             {activeIdx !== i && <div className="absolute inset-0 bg-black/60 z-0 pointer-events-none transition-colors duration-500" />}
             
             <div className={clsx("flex items-center gap-2 bg-black/20 relative z-10", isGrid ? "p-1.5" : "p-3")}>
-              {!isGrid && <img src={p.pfpUrl} className="w-8 h-8 rounded-full border-2 border-white/50 object-cover" alt={p.name} />}
+              {!isGrid && (
+                 p.pfpUrl ? <img src={p.pfpUrl} className="w-8 h-8 rounded-full border-2 border-white/50 object-cover shrink-0" alt={p.name} /> : <div className="w-8 h-8 rounded-full border-2 border-white/50 bg-slate-800 flex items-center justify-center font-bold text-slate-300 uppercase shrink-0 text-xs shadow-inner">{p.name.substring(0,2)}</div>
+              )}
               <span className={clsx("font-bold text-white tracking-tight truncate", isGrid ? "text-xs ml-1" : "text-sm md:text-lg")}>{p.name.split(' ')[0]}</span>
               <div className="ml-auto flex gap-1 bg-black/30 px-2 py-1 rounded-full">
                 {[...Array(legsToWin)].map((_, legIdx) => (
