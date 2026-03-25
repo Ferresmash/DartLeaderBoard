@@ -6,6 +6,16 @@ import clsx from 'clsx';
 
 const BG_COLORS = ['bg-red-500', 'bg-amber-500', 'bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
 
+const getNextActiveIdx = (currentIdx, isSD, sdPlayers, totalLen) => {
+  let next = (currentIdx + 1) % totalLen;
+  if (isSD) {
+    while (!sdPlayers.includes(next)) {
+      next = (next + 1) % totalLen;
+    }
+  }
+  return next;
+};
+
 export default function Play({ onMatchComplete }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -33,6 +43,11 @@ export default function Play({ onMatchComplete }) {
   const [bestScores, setBestScores] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
+
+  // Sudden Death State
+  const [isSuddenDeath, setIsSuddenDeath] = useState(false);
+  const [suddenDeathPlayers, setSuddenDeathPlayers] = useState([]);
+  const [suddenDeathScores, setSuddenDeathScores] = useState({});
   
   const activePlayer = players[activeIdx];
   const isGrid = players.length > 3;
@@ -52,22 +67,28 @@ export default function Play({ onMatchComplete }) {
   };
 
   const finalizeTurn = (score, isExplicitBust) => {
+    const isRoundEnd = isSuddenDeath 
+      ? activeIdx === suddenDeathPlayers[suddenDeathPlayers.length - 1]
+      : activeIdx === players.length - 1;
+
     const currScore = activePlayer.currentScore;
     let newScore = currScore - score;
     let isBust = isExplicitBust;
-    
-    // Standard Bust Logic
-    if (!isBust && (newScore < 0 || newScore === 1)) {
-      isBust = true;
-    }
 
-    if (isBust) {
-      newScore = currScore; // Bust, reset
-      score = 0; 
-    }
-
-    if (!isBust && (!bestScores[activePlayer.id] || score > bestScores[activePlayer.id])) {
-      setBestScores(prev => ({ ...prev, [activePlayer.id]: score }));
+    if (isSuddenDeath) {
+      isBust = false; // No busting in shootout
+      newScore = currScore; // Main score stays at 0
+    } else {
+      if (!isBust && (newScore < 0 || newScore === 1)) {
+        isBust = true;
+      }
+      if (isBust) {
+        newScore = currScore;
+        score = 0; 
+      }
+      if (!isBust && (!bestScores[activePlayer.id] || score > bestScores[activePlayer.id])) {
+        setBestScores(prev => ({ ...prev, [activePlayer.id]: score }));
+      }
     }
 
     const turnData = {
@@ -84,16 +105,52 @@ export default function Play({ onMatchComplete }) {
       prevScore: currScore,
       scoreInputted: score,
       dartsThrownBefore: activePlayer.dartsThrown,
-      isBustRecorded: isBust
+      isBustRecorded: isBust,
+      wasSuddenDeath: isSuddenDeath,
+      prevSuddenDeathScores: { ...suddenDeathScores },
+      prevSuddenDeathPlayers: [...suddenDeathPlayers]
     }]);
 
     const newPlayers = [...players];
     newPlayers[activeIdx].currentScore = newScore;
     newPlayers[activeIdx].dartsThrown += 3;
-    
-    if (newScore === 0) {
+
+    // SUDDEN DEATH LOGIC
+    if (isSuddenDeath) {
+      const newSDScores = { ...suddenDeathScores, [activeIdx]: score };
+      setSuddenDeathScores(newSDScores);
+
+      if (isRoundEnd) {
+        const scores = suddenDeathPlayers.map(idx => newSDScores[idx]);
+        const maxScore = Math.max(...scores);
+        const winners = suddenDeathPlayers.filter(idx => newSDScores[idx] === maxScore);
+
+        if (winners.length === 1) {
+          const winnerPlayer = newPlayers[winners[0]];
+          winnerPlayer.legsWon += 1;
+          setPlayers(newPlayers);
+          handleMatchWin(winnerPlayer);
+          return;
+        } else {
+          // Tie within Sudden Death: Repeat shootout for tied players
+          setSuddenDeathScores({});
+          setSuddenDeathPlayers(winners);
+          setActiveIdx(winners[0]);
+          setPlayers(newPlayers);
+          setInputVal('');
+          return;
+        }
+      }
+
+      setActiveIdx(getNextActiveIdx(activeIdx, true, suddenDeathPlayers, players.length));
+      setPlayers(newPlayers);
+      setInputVal('');
+      return;
+    }
+
+    // MULTI-LEG LOGIC (Immediate Win)
+    if (newScore === 0 && legsToWin > 1) {
       newPlayers[activeIdx].legsWon += 1;
-      
       if (newPlayers[activeIdx].legsWon >= legsToWin) {
         setPlayers(newPlayers);
         handleMatchWin(newPlayers[activeIdx]);
@@ -105,8 +162,31 @@ export default function Play({ onMatchComplete }) {
         });
       }
     }
-    
-    setActiveIdx((activeIdx + 1) % players.length);
+
+    // 1-LEG ROUND COMPLETION LOGIC
+    if (isRoundEnd && legsToWin === 1) {
+      const zeroPlayersCount = newPlayers.filter(p => p.currentScore === 0).length;
+      if (zeroPlayersCount === 1) {
+         const winnerObj = newPlayers.find(p => p.currentScore === 0);
+         winnerObj.legsWon += 1;
+         setPlayers(newPlayers);
+         handleMatchWin(winnerObj);
+         return;
+      } else if (zeroPlayersCount > 1) {
+         // Sudden Death Triggers!
+         setIsSuddenDeath(true);
+         const sdPlayers = newPlayers.map((p, i) => p.currentScore === 0 ? i : -1).filter(i => i !== -1);
+         setSuddenDeathPlayers(sdPlayers);
+         setSuddenDeathScores({});
+         
+         setActiveIdx(sdPlayers[0]);
+         setPlayers(newPlayers);
+         setInputVal('');
+         return;
+      }
+    }
+
+    setActiveIdx(getNextActiveIdx(activeIdx, false, [], players.length));
     setPlayers(newPlayers);
     setInputVal('');
   };
@@ -125,6 +205,10 @@ export default function Play({ onMatchComplete }) {
     const newPlayers = [...players];
     newPlayers[lastMove.playerIdx].currentScore = lastMove.prevScore;
     newPlayers[lastMove.playerIdx].dartsThrown = lastMove.dartsThrownBefore;
+    
+    setIsSuddenDeath(lastMove.wasSuddenDeath || false);
+    setSuddenDeathScores(lastMove.prevSuddenDeathScores || {});
+    setSuddenDeathPlayers(lastMove.prevSuddenDeathPlayers || []);
     
     setPlayers(newPlayers);
     setActiveIdx(lastMove.playerIdx);
@@ -163,37 +247,48 @@ export default function Play({ onMatchComplete }) {
         "w-full h-1/2 relative z-10",
         isGrid ? "grid grid-cols-2 grid-rows-2" : "flex"
       )}>
-        {players.map((p, i) => (
-          <div key={p.id} className={clsx(
-            "flex flex-col shadow-inner transition-all duration-300 relative overflow-hidden",
-            isGrid ? "" : "flex-1",
-            p.bgColor,
-            activeIdx === i ? "shadow-[inset_0_0_40px_rgba(0,0,0,0.5)] z-20 scale-[1.02] opacity-100" : "scale-[0.98]"
-          )}>
-            {/* Dark Overlay for inactive players */}
-            {activeIdx !== i && <div className="absolute inset-0 bg-black/60 z-0 pointer-events-none transition-colors duration-500" />}
-            
-            <div className={clsx("flex items-center gap-2 bg-black/20 relative z-10", isGrid ? "p-1.5" : "p-3")}>
-              {!isGrid && (
-                 p.pfpUrl ? <img src={p.pfpUrl} className="w-8 h-8 rounded-full border-2 border-white/50 object-cover shrink-0" alt={p.name} /> : <div className="w-8 h-8 rounded-full border-2 border-white/50 bg-slate-800 flex items-center justify-center font-bold text-slate-300 uppercase shrink-0 text-xs shadow-inner">{p.name.substring(0,2)}</div>
-              )}
-              <span className={clsx("font-bold text-white tracking-tight truncate", isGrid ? "text-xs ml-1" : "text-sm md:text-lg")}>{p.name.split(' ')[0]}</span>
-              <div className="ml-auto flex gap-1 bg-black/30 px-2 py-1 rounded-full">
-                {[...Array(legsToWin)].map((_, legIdx) => (
-                  <div key={legIdx} className={clsx("w-2 h-2 md:w-3 md:h-3 rounded-full border border-white/70", legIdx < p.legsWon ? "bg-white" : "bg-transparent")} />
-                ))}
+        {players.map((p, i) => {
+          const isFading = isSuddenDeath && !suddenDeathPlayers.includes(i);
+          return (
+            <div key={p.id} className={clsx(
+              "flex flex-col shadow-inner transition-all duration-300 relative overflow-hidden",
+              isGrid ? "" : "flex-1",
+              p.bgColor,
+              activeIdx === i ? "shadow-[inset_0_0_40px_rgba(0,0,0,0.5)] z-20 scale-[1.02] opacity-100" : "scale-[0.98]",
+              isFading && "opacity-20 grayscale"
+            )}>
+              {/* Dark Overlay for inactive players */}
+              {activeIdx !== i && <div className="absolute inset-0 bg-black/60 z-0 pointer-events-none transition-colors duration-500" />}
+              
+              <div className={clsx("flex items-center gap-2 bg-black/20 relative z-10", isGrid ? "p-1.5" : "p-3")}>
+                {!isGrid && (
+                   p.pfpUrl ? <img src={p.pfpUrl} className="w-8 h-8 rounded-full border-2 border-white/50 object-cover shrink-0" alt={p.name} /> : <div className="w-8 h-8 rounded-full border-2 border-white/50 bg-slate-800 flex items-center justify-center font-bold text-slate-300 uppercase shrink-0 text-xs shadow-inner">{p.name.substring(0,2)}</div>
+                )}
+                <span className={clsx("font-bold text-white tracking-tight truncate", isGrid ? "text-xs ml-1" : "text-sm md:text-lg")}>{p.name.split(' ')[0]}</span>
+                <div className="ml-auto flex gap-1 bg-black/30 px-2 py-1 rounded-full">
+                  {[...Array(legsToWin)].map((_, legIdx) => (
+                    <div key={legIdx} className={clsx("w-2 h-2 md:w-3 md:h-3 rounded-full border border-white/70", legIdx < p.legsWon ? "bg-white" : "bg-transparent")} />
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-transparent to-black/10 z-10">
+                {isSuddenDeath && suddenDeathPlayers.includes(i) ? (
+                  <>
+                    <span className="text-amber-400 font-extrabold text-[10px] md:text-xs tracking-widest uppercase mb-1 md:mb-2 animate-pulse drop-shadow-md">Sudden Death</span>
+                    <span className={clsx("font-black text-rose-300 drop-shadow-lg tracking-tighter leading-none", isGrid ? "text-5xl" : "text-6xl md:text-8xl")}>{suddenDeathScores[i] !== undefined ? suddenDeathScores[i] : '-'}</span>
+                  </>
+                ) : (
+                  <span className={clsx("font-black text-white drop-shadow-lg tracking-tighter leading-none", isGrid ? "text-5xl" : "text-6xl md:text-9xl")}>{p.currentScore}</span>
+                )}
+              </div>
+              
+              <div className={clsx("bg-black/30 flex justify-center text-white/90 font-bold tracking-wider uppercase relative z-10", isGrid ? "p-1.5 text-[10px]" : "p-3 text-xs md:text-sm")}>
+                <span>Avg: {p.dartsThrown > 0 ? ((startingScore - p.currentScore) / (p.dartsThrown / 3)).toFixed(1) : '0.0'}</span>
               </div>
             </div>
-            
-            <div className="flex-1 flex items-center justify-center relative bg-gradient-to-b from-transparent to-black/10 z-10">
-              <span className={clsx("font-black text-white drop-shadow-lg tracking-tighter leading-none", isGrid ? "text-5xl" : "text-6xl md:text-9xl")}>{p.currentScore}</span>
-            </div>
-            
-            <div className={clsx("bg-black/30 flex justify-center text-white/90 font-bold tracking-wider uppercase relative z-10", isGrid ? "p-1.5 text-[10px]" : "p-3 text-xs md:text-sm")}>
-              <span>Avg: {p.dartsThrown > 0 ? ((startingScore - p.currentScore) / (p.dartsThrown / 3)).toFixed(1) : '0.0'}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Controls View - Exactly 50% height */}
@@ -202,7 +297,10 @@ export default function Play({ onMatchComplete }) {
           <button onClick={handleUndo} disabled={history.length === 0} className="text-slate-400 disabled:opacity-30 hover:text-white flex items-center gap-1 font-bold transition-colors">
             <ChevronLeft className="w-5 h-5 md:w-6 md:h-6" /> Undo
           </button>
-          <span className="text-amber-400 font-black uppercase tracking-widest text-base md:text-xl drop-shadow-md">{activePlayer.name.split(' ')[0]}'s Turn</span>
+          <span className="text-amber-400 font-black uppercase tracking-widest text-base md:text-xl drop-shadow-md flex items-center gap-2">
+            {isSuddenDeath && <Zap className="w-5 h-5 text-amber-400 animate-pulse" />}
+            {isSuddenDeath ? `SHOOTOUT: ${activePlayer.name.split(' ')[0]}` : `${activePlayer.name.split(' ')[0]}'s Turn`}
+          </span>
           <button onClick={() => setShowExitModal(true)} className="text-slate-400 hover:text-white transition-colors h-8 w-8 flex items-center justify-center">
             <Settings className="w-6 h-6" />
           </button>
@@ -239,7 +337,8 @@ export default function Play({ onMatchComplete }) {
           <div className="col-span-3 grid grid-cols-3 gap-2 md:gap-3">
              <button 
               onClick={handleExplicitBust}
-              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-extrabold text-xl md:text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-rose-500/20 flex flex-col items-center justify-center tracking-wider"
+              disabled={isSuddenDeath}
+              className="bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 disabled:scale-100 disabled:cursor-not-allowed text-rose-400 font-extrabold text-xl md:text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-rose-500/20 flex flex-col items-center justify-center tracking-wider"
             >
               Bust
             </button>
