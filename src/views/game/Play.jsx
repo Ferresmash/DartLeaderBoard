@@ -142,18 +142,27 @@ export default function Play({ onMatchComplete }) {
       setSuddenDeathScores(newSDScores);
 
       if (isRoundEnd) {
-        const scores = suddenDeathPlayers.map(idx => newSDScores[idx]);
-        const maxScore = Math.max(...scores);
-        const winners = suddenDeathPlayers.filter(idx => newSDScores[idx] === maxScore);
+        let maxScore = -1;
+        let winners = [];
+        
+        suddenDeathPlayers.forEach(idx => {
+           const s = newSDScores[idx] !== undefined ? newSDScores[idx] : -1;
+           if (s > maxScore) {
+              maxScore = s;
+              winners = [idx];
+           } else if (s === maxScore && s !== -1) {
+              winners.push(idx);
+           }
+        });
 
         if (winners.length === 1) {
-          const winnerPlayer = newPlayers[winners[0]];
+          const winnerPlayer = { ...newPlayers[winners[0]] };
           winnerPlayer.legsWon += 1;
+          newPlayers[winners[0]] = winnerPlayer;
           setPlayers(newPlayers);
           handleMatchWin(winnerPlayer);
           return;
-        } else {
-          // Tie within Sudden Death: Repeat shootout for tied players
+        } else if (winners.length > 1) {
           setSuddenDeathScores({});
           setSuddenDeathPlayers(winners);
           setActiveIdx(winners[0]);
