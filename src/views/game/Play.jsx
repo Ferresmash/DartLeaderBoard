@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { submitMatchData } from '../../firebase/db';
-import { Trophy, ChevronLeft, Delete, Check, Target, Skull, Settings, X } from 'lucide-react';
+import { Trophy, ChevronLeft, Delete, Check, Target, Skull, Settings, X, Plus } from 'lucide-react';
+import { getCheckout } from '../../utils/checkouts';
 import clsx from 'clsx';
 
 const BG_COLORS = ['bg-red-500', 'bg-amber-500', 'bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
@@ -53,11 +54,31 @@ export default function Play({ onMatchComplete }) {
   const isGrid = players.length > 3;
 
   const handleKeypad = (val) => {
-    if (inputVal.length < 3) {
-      if (inputVal === '' && val === '0') return;
-      const newVal = inputVal + val;
-      if (parseInt(newVal) <= 180) {
-        setInputVal(newVal);
+    if (val === '+') {
+      if (!inputVal || inputVal.endsWith('+')) return;
+      setInputVal(prev => prev + '+');
+      return;
+    }
+
+    if (inputVal === '0') {
+      setInputVal(val);
+      return;
+    }
+    
+    const potentialExpr = inputVal + val;
+    const parts = potentialExpr.split('+');
+    let sum = 0;
+    
+    for (let i = 0; i < parts.length; i++) {
+        const v = parseInt(parts[i]);
+        if (!isNaN(v)) {
+           sum += v;
+        }
+    }
+
+    if (sum <= 180) {
+      if (parts[parts.length - 1].length <= 3) {
+        setInputVal(potentialExpr);
       }
     }
   };
@@ -193,7 +214,8 @@ export default function Play({ onMatchComplete }) {
 
   const submitScore = () => {
     if (!inputVal) return;
-    finalizeTurn(parseInt(inputVal), false);
+    const sum = inputVal.split('+').reduce((acc, curr) => acc + (parseInt(curr) || 0), 0);
+    finalizeTurn(sum, false);
   };
 
   const handleExplicitBust = () => finalizeTurn(0, true);
@@ -272,19 +294,29 @@ export default function Play({ onMatchComplete }) {
                 </div>
               </div>
               
-              <div className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-transparent to-black/10 z-10">
+              <div className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-transparent to-black/10 z-10 w-full px-2">
                 {isSuddenDeath && suddenDeathPlayers.includes(i) ? (
                   <>
                     <span className="text-amber-400 font-extrabold text-[10px] md:text-xs tracking-widest uppercase mb-1 md:mb-2 animate-pulse drop-shadow-md">Sudden Death</span>
                     <span className={clsx("font-black text-rose-300 drop-shadow-lg tracking-tighter leading-none", isGrid ? "text-5xl" : "text-6xl md:text-8xl")}>{suddenDeathScores[i] !== undefined ? suddenDeathScores[i] : '-'}</span>
                   </>
                 ) : (
-                  <span className={clsx("font-black text-white drop-shadow-lg tracking-tighter leading-none", isGrid ? "text-5xl" : "text-6xl md:text-9xl")}>{p.currentScore}</span>
+                  <>
+                    <span className={clsx("font-black text-white drop-shadow-lg tracking-tighter leading-none mt-4", isGrid ? "text-5xl" : "text-6xl md:text-9xl")}>{p.currentScore}</span>
+                    <span className="h-6 mt-1 text-slate-500 font-bold uppercase tracking-widest text-[9px] md:text-xs drop-shadow-sm text-center truncate w-full">
+                      {getCheckout(p.currentScore) || ''}
+                    </span>
+                  </>
                 )}
               </div>
               
               <div className={clsx("bg-black/30 flex justify-center text-white/90 font-bold tracking-wider uppercase relative z-10", isGrid ? "p-1.5 text-[10px]" : "p-3 text-xs md:text-sm")}>
-                <span>Avg: {p.dartsThrown > 0 ? ((startingScore - p.currentScore) / (p.dartsThrown / 3)).toFixed(1) : '0.0'}</span>
+                {(() => {
+                  const pTurns = matchTurns.filter(t => t.playerId === p.id && !t.isBust);
+                  const pSum = pTurns.reduce((acc, t) => acc + t.score, 0);
+                  const pAvg = pTurns.length > 0 ? (pSum / pTurns.length).toFixed(1) : '0.0';
+                  return <span>Avg: {pAvg}</span>;
+                })()}
               </div>
             </div>
           );
@@ -311,8 +343,11 @@ export default function Play({ onMatchComplete }) {
           <div className="w-12 flex justify-center z-10">
             <Target className="w-5 h-5 md:w-6 md:h-6 text-slate-500" />
           </div>
-          <div className="flex-1 flex justify-center z-10">
-            <span className="text-4xl md:text-6xl font-black text-white tracking-widest leading-none mt-1">{inputVal || '-'}</span>
+          <div className="flex-1 flex flex-col justify-center items-center z-10 w-full overflow-hidden px-4">
+            <span className="text-4xl md:text-6xl font-black text-white tracking-widest leading-none mt-1 truncate max-w-full text-center">{inputVal || '-'}</span>
+            {inputVal.includes('+') && (
+              <span className="text-emerald-400 font-black text-sm uppercase tracking-widest leading-none mt-1 shadow-md">Total: {inputVal.split('+').reduce((acc, curr) => acc + (parseInt(curr) || 0), 0)}</span>
+            )}
           </div>
           <div className="flex gap-2 z-10 h-full">
             <button onClick={handleBackspace} disabled={!inputVal} className="h-full w-14 md:w-20 rounded-[16px] bg-white/5 hover:bg-white/10 disabled:opacity-30 text-rose-400 flex items-center justify-center active:scale-95 transition-all">
@@ -348,7 +383,12 @@ export default function Play({ onMatchComplete }) {
             >
               0
             </button>
-             <div className="col-span-1" />
+             <button 
+              onClick={() => handleKeypad('+')}
+              className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 font-black text-3xl md:text-4xl rounded-2xl active:scale-95 transition-all shadow-md border border-indigo-500/30 flex items-center justify-center"
+            >
+              +
+            </button>
           </div>
         </div>
       </div>

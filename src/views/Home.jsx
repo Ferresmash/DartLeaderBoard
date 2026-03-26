@@ -5,12 +5,20 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 export default function Home({ players, matches }) {
   const navigate = useNavigate();
   const [filter, setFilter] = useState('7_days'); // '7_days', '30_days', 'all_time', 'best_score'
+  const [onlyBigFour, setOnlyBigFour] = useState(false);
+  
+  const BIG_FOUR_IDS = ['ferdinand', 'max', 'emil', 'ted'];
 
   const leaderboard = useMemo(() => {
     const now = new Date().getTime();
     
     return players.map(p => {
-      const playerMatches = matches.filter(m => m.winnerId === p.id);
+      let activeMatches = matches;
+      if (onlyBigFour) {
+        activeMatches = matches.filter(m => m.participantIds && BIG_FOUR_IDS.every(id => m.participantIds.includes(id)));
+      }
+      
+      const playerMatches = activeMatches.filter(m => m.winnerId === p.id);
       
       const filteredWins = playerMatches.filter(m => {
         if (filter === 'all_time') return true;
@@ -20,14 +28,29 @@ export default function Home({ players, matches }) {
         return true;
       }).length;
 
+      let computedTotalWins = playerMatches.length;
+      let computedBestScore = 0;
+      
+      if (onlyBigFour) {
+        activeMatches.forEach(m => {
+          if (m.turns) {
+            m.turns.forEach(t => {
+              if (t.playerId === p.id && t.score > computedBestScore) {
+                computedBestScore = t.score;
+              }
+            });
+          }
+        });
+      }
+
       return {
         ...p,
         filteredWins,
-        totalWins: p.totalWins,
-        bestScore: p.bestScore || 0
+        totalWins: onlyBigFour ? computedTotalWins : p.totalWins,
+        bestScore: onlyBigFour ? computedBestScore : (p.bestScore || 0)
       };
     }).sort((a, b) => filter === 'best_score' ? (b.bestScore||0) - (a.bestScore||0) : (b.filteredWins - a.filteredWins) || (b.totalWins - a.totalWins) || (b.bestScore - a.bestScore));
-  }, [players, matches, filter]);
+  }, [players, matches, filter, onlyBigFour]);
 
   const filterLabels = {
     '7_days': 'Last 7 Days',
@@ -52,18 +75,28 @@ export default function Home({ players, matches }) {
             </p>
           </div>
           
-          <div className="relative group z-20">
-            <select 
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg"
-            >
-              <option value="7_days" className="bg-slate-900">Last 7 Days</option>
-              <option value="30_days" className="bg-slate-900">Last 30 Days</option>
-              <option value="all_time" className="bg-slate-900">All Time Wins</option>
-              <option value="best_score" className="bg-slate-900">Highest Score</option>
-            </select>
-            <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-indigo-300 transition-colors" />
+          <div className="relative group z-20 flex flex-col md:flex-row gap-4 items-end md:items-center">
+            <label className="flex items-center gap-2 cursor-pointer bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition-colors backdrop-blur-sm shadow-md h-full">
+              <input type="checkbox" className="hidden" checked={onlyBigFour} onChange={() => setOnlyBigFour(!onlyBigFour)} />
+              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${onlyBigFour ? 'bg-indigo-500 border-indigo-400' : 'bg-transparent border-slate-500'}`}>
+                {onlyBigFour && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
+              </div>
+              <span className="text-slate-300 font-bold text-sm select-none">Big 4 Matches</span>
+            </label>
+
+            <div className="relative group">
+              <select 
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
+              >
+                <option value="7_days" className="bg-slate-900">Last 7 Days</option>
+                <option value="30_days" className="bg-slate-900">Last 30 Days</option>
+                <option value="all_time" className="bg-slate-900">All Time Wins</option>
+                <option value="best_score" className="bg-slate-900">Highest Score</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-indigo-300 transition-colors" />
+            </div>
           </div>
         </div>
       </div>
@@ -76,7 +109,12 @@ export default function Home({ players, matches }) {
           let totalThrowsCount = 0; 
           let bustCount = 0;
 
-          matches.forEach(m => {
+          let activeMatches = matches;
+          if (onlyBigFour) {
+            activeMatches = matches.filter(m => m.participantIds && BIG_FOUR_IDS.every(id => m.participantIds.includes(id)));
+          }
+
+          activeMatches.forEach(m => {
             const diffDays = (new Date().getTime() - m.timestamp) / (1000 * 60 * 60 * 24);
             let inTimeframe = false;
             if (filter === 'all_time') inTimeframe = true;
