@@ -102,8 +102,8 @@ export default function Home({ players, matches }) {
       <div className="bg-gradient-to-b from-indigo-900/40 to-transparent pt-12 pb-6 px-6 md:px-12 relative overflow-hidden flex justify-between items-start">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 z-0"></div>
         
-        <div className="relative z-10 w-full flex justify-between items-end">
-          <div>
+        <div className="relative z-10 w-full flex flex-col md:flex-row md:justify-between md:items-end gap-6 mb-2">
+          <div className="w-full md:w-auto">
             <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2 flex items-center gap-3">
                <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent drop-shadow-sm">Dartboard</span>
             </h1>
@@ -113,41 +113,41 @@ export default function Home({ players, matches }) {
             </p>
           </div>
           
-          <div className="relative group z-20 flex flex-col md:flex-row gap-4 items-end md:items-center">
-            <label className="flex items-center gap-2 cursor-pointer bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition-colors backdrop-blur-sm shadow-md h-full">
+          <div className="relative group z-20 flex flex-col sm:flex-row gap-3 items-stretch md:items-center w-full md:w-auto">
+            <label className="flex items-center gap-2 cursor-pointer bg-white/5 border border-white/10 px-4 py-3 md:py-2 rounded-xl hover:bg-white/10 transition-colors backdrop-blur-sm shadow-md h-full w-full sm:w-auto whitespace-nowrap">
               <input type="checkbox" className="hidden" checked={onlyBigFour} onChange={() => setOnlyBigFour(!onlyBigFour)} />
-              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${onlyBigFour ? 'bg-indigo-500 border-indigo-400' : 'bg-transparent border-slate-500'}`}>
+              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${onlyBigFour ? 'bg-indigo-500 border-indigo-400' : 'bg-transparent border-slate-500'}`}>
                 {onlyBigFour && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
               </div>
               <span className="text-slate-300 font-bold text-sm select-none">Big 4 Matches</span>
             </label>
 
-            <div className="relative group flex gap-2">
-              <div className="relative group/time">
+            <div className="relative group flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="relative group/time w-full sm:w-auto">
                 <select 
                   value={timeSpan}
                   onChange={(e) => setTimeSpan(e.target.value)}
-                  className="appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
+                  className="w-full appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-3 md:py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
                 >
                   <option value="7_days" className="bg-slate-900">Last 7 Days</option>
                   <option value="30_days" className="bg-slate-900">Last 30 Days</option>
                   <option value="all_time" className="bg-slate-900">All Time</option>
                 </select>
-                <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/time:text-indigo-300 transition-colors" />
+                <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-4 md:right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/time:text-indigo-300 transition-colors" />
               </div>
 
-              <div className="relative group/stat">
+              <div className="relative group/stat w-full sm:w-auto">
                 <select 
                   value={statType}
                   onChange={(e) => setStatType(e.target.value)}
-                  className="appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
+                  className="w-full appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-3 md:py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
                 >
                   <option value="wins" className="bg-slate-900">Wins</option>
                   <option value="best_score" className="bg-slate-900">Highest Score</option>
                   <option value="highest_checkout" className="bg-slate-900">Highest Checkout</option>
                   <option value="avg_nine_darts" className="bg-slate-900">9 Darts Avg</option>
                 </select>
-                <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/stat:text-indigo-300 transition-colors" />
+                <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-4 md:right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/stat:text-indigo-300 transition-colors" />
               </div>
             </div>
           </div>
