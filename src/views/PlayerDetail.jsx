@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trophy, Target, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Trophy, Target, TrendingUp, Skull } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -16,8 +16,58 @@ export default function PlayerDetail({ players, matches }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const player = players.find(p => p.id === id);
-  const [chartMetric, setChartMetric] = useState('wins'); // 'wins', 'winRate', 'avgScore', 'bustRate'
+  const [chartMetric, setChartMetric] = useState('wins'); // 'wins', 'winRate', 'avgScore', 'bustRate', 'highestCheckout'
 
+  // ── Lifetime stats (across ALL matches) ─────────────────────────────
+  const lifetimeStats = useMemo(() => {
+    let highestCheckout = 0;
+    const nineDartTotals = [];
+    let lifetimeBusts = 0;
+    let lifetimeTotalThrows = 0;
+
+    matches.forEach(m => {
+      if (!m.turns) return;
+      const playerTurns = m.turns.filter(t => t.playerId === player.id);
+      if (playerTurns.length === 0) return;
+
+      // ── Avg 9 Darts: first 3 turns = 9 darts ──
+      const firstThree = playerTurns.slice(0, 3);
+      nineDartTotals.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
+
+      // ── Highest Checkout: simulate running score ──
+      let running = m.startingScore || 501;
+      playerTurns.forEach(t => {
+        lifetimeTotalThrows++;
+        if (t.isBust) {
+          lifetimeBusts++;
+          return; // score stays the same
+        }
+        running -= t.score;
+        if (running === 0) {
+          if (t.score > highestCheckout) highestCheckout = t.score;
+          running = m.startingScore || 501; // reset for next leg in same match
+        }
+        if (running < 0) {
+          // shouldn't happen with valid data, but guard anyway
+          running += t.score;
+        }
+      });
+    });
+
+    const avgNineDarts =
+      nineDartTotals.length > 0
+        ? Number((nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length).toFixed(1))
+        : 0;
+
+    const bustPct =
+      lifetimeTotalThrows > 0
+        ? Number(((lifetimeBusts / lifetimeTotalThrows) * 100).toFixed(1))
+        : 0;
+
+    return { highestCheckout, avgNineDarts, bustPct };
+  }, [matches, player.id]);
+
+  // ── Weekly chart data ─────────────────────────────────────────────────
   const chartData = useMemo(() => {
     const data = [];
     const now = new Date();
@@ -44,32 +94,47 @@ export default function PlayerDetail({ players, matches }) {
       let totalThrowScore = 0;
       let totalThrowsCount = 0;
       let bustCount = 0;
+      let highestCheckout = 0;
+      let nineDartTotals = [];
 
       weekMatches.forEach(m => {
         if (m.turns) {
-          m.turns.forEach(t => {
-            if (t.playerId === player.id) {
-              totalThrowsCount++;
-              if (t.isBust) {
-                bustCount++;
-              } else {
-                validThrows++;
-                totalThrowScore += t.score;
+          const playerTurns = m.turns.filter(t => t.playerId === player.id);
+          
+          if (playerTurns.length > 0) {
+             const firstThree = playerTurns.slice(0, 3);
+             nineDartTotals.push(firstThree.reduce((acc, t) => acc + t.score, 0));
+          }
+
+          let currentTotal = m.startingScore || 501;
+          playerTurns.forEach(t => {
+            if (!t.isBust) {
+              validThrows++;
+              totalThrowScore += t.score;
+              currentTotal -= t.score;
+              if (currentTotal === 0 && t.score > highestCheckout) {
+                highestCheckout = t.score;
               }
+              if (currentTotal === 0) currentTotal = m.startingScore || 501;
             }
+            totalThrowsCount++;
+            if (t.isBust) bustCount++;
           });
         }
       });
 
       const avgScore = validThrows > 0 ? totalThrowScore / validThrows : 0;
       const bustRate = totalThrowsCount > 0 ? (bustCount / totalThrowsCount) * 100 : 0;
+      const avgNineDarts = nineDartTotals.length > 0 ? nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length : 0;
 
       data.push({
         name: `W${getWeekNumber(new Date(weekStart))}`,
         wins: wins,
         winRate: Number(winRate.toFixed(1)),
         avgScore: Number(avgScore.toFixed(1)),
-        bustRate: Number(bustRate.toFixed(1))
+        bustRate: Number(bustRate.toFixed(1)),
+        highestCheckout: highestCheckout,
+        avgNineDarts: Number(avgNineDarts.toFixed(1))
       });
     }
     return data;
@@ -87,12 +152,12 @@ export default function PlayerDetail({ players, matches }) {
         <div className="flex flex-col items-center md:sticky md:top-8 w-full md:w-[400px]">
           {/* Mobile Image (Circle Cut) */}
           <div className="md:hidden w-36 h-36 rounded-full p-1.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-2xl shadow-indigo-500/20 mb-8 mt-4">
-            <img src={player.pfpUrl} alt={player.name} className="w-full h-full rounded-full object-cover border-[6px] border-slate-950" />
+            <img src={player.pfpUrl || null} alt={player.name} className="w-full h-full rounded-full object-cover border-[6px] border-slate-950" />
           </div>
           
           {/* Desktop Image (Full Image, Transparent Background) */}
           <div className="hidden md:block w-full max-h-[500px] mb-12 drop-shadow-[0_20px_20px_rgba(99,102,241,0.2)]">
-            <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-contain" />
+            <img src={player.pfpUrl || null} alt={player.name} className="w-full h-full object-contain" />
           </div>
           
           <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight text-center">{player.name}</h1>
@@ -129,6 +194,38 @@ export default function PlayerDetail({ players, matches }) {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mb-8">
+            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-3xl flex items-center gap-6 shadow-lg hover:bg-white/[0.05] transition-colors relative overflow-hidden group">
+               <div className="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center">
+                  <Skull className="w-7 h-7 text-rose-400" />
+               </div>
+               <div>
+                  <p className="text-slate-400 text-sm font-medium">Bust %</p>
+                  <p className="text-2xl font-black text-white">{lifetimeStats.bustPct}%</p>
+               </div>
+            </div>
+            
+            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-3xl flex items-center gap-6 shadow-lg hover:bg-white/[0.05] transition-colors relative overflow-hidden group">
+               <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center">
+                  <TrendingUp className="w-7 h-7 text-indigo-400" />
+               </div>
+               <div>
+                  <p className="text-slate-400 text-sm font-medium">Avg 9 Darts</p>
+                  <p className="text-3xl font-black text-white">{lifetimeStats.avgNineDarts}</p>
+               </div>
+            </div>
+
+            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-3xl flex items-center gap-6 shadow-lg hover:bg-white/[0.05] transition-colors relative overflow-hidden group">
+               <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                  <Target className="w-7 h-7 text-emerald-400" />
+               </div>
+               <div>
+                  <p className="text-slate-400 text-sm font-medium">Highest Checkout</p>
+                  <p className="text-3xl font-black text-white">{lifetimeStats.highestCheckout || '—'}</p>
+               </div>
+            </div>
+          </div>
+
           <div className="w-full bg-white/[0.02] border border-white/5 p-5 md:p-8 rounded-3xl shadow-xl flex-1 backdrop-blur-sm">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
               <h3 className="font-bold text-xl md:text-2xl text-slate-100 flex items-center gap-2">
@@ -143,6 +240,7 @@ export default function PlayerDetail({ players, matches }) {
                 <option value="winRate" className="bg-slate-900">Win Rate %</option>
                 <option value="avgScore" className="bg-slate-900">Average Score</option>
                 <option value="bustRate" className="bg-slate-900">Bust Rate %</option>
+                <option value="highestCheckout" className="bg-slate-900">Highest Checkout</option>
               </select>
             </div>
             

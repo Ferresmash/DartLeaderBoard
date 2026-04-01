@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { submitMatchData } from '../../firebase/db';
-import { Trophy, ChevronLeft, Delete, Check, Target, Skull, Settings, X, Plus } from 'lucide-react';
+import { Trophy, ChevronLeft, Delete, Check, Target, Skull, Settings, X, Plus, Zap } from 'lucide-react';
 import { getCheckout } from '../../utils/checkouts';
 import clsx from 'clsx';
 
@@ -10,8 +10,10 @@ const BG_COLORS = ['bg-red-500', 'bg-amber-500', 'bg-emerald-500', 'bg-blue-500'
 const getNextActiveIdx = (currentIdx, isSD, sdPlayers, totalLen) => {
   let next = (currentIdx + 1) % totalLen;
   if (isSD) {
-    while (!sdPlayers.includes(next)) {
+    let attempts = 0;
+    while (!sdPlayers.includes(next) && attempts < totalLen) {
       next = (next + 1) % totalLen;
+      attempts++;
     }
   }
   return next;
@@ -160,7 +162,7 @@ export default function Play({ onMatchComplete }) {
           winnerPlayer.legsWon += 1;
           newPlayers[winners[0]] = winnerPlayer;
           setPlayers(newPlayers);
-          handleMatchWin(winnerPlayer);
+          handleMatchWin(winnerPlayer, newPlayers);
           return;
         } else if (winners.length > 1) {
           setSuddenDeathScores({});
@@ -183,7 +185,7 @@ export default function Play({ onMatchComplete }) {
       newPlayers[activeIdx].legsWon += 1;
       if (newPlayers[activeIdx].legsWon >= legsToWin) {
         setPlayers(newPlayers);
-        handleMatchWin(newPlayers[activeIdx]);
+        handleMatchWin(newPlayers[activeIdx], newPlayers);
         return;
       } else {
         newPlayers.forEach(p => {
@@ -197,10 +199,12 @@ export default function Play({ onMatchComplete }) {
     if (isRoundEnd && legsToWin === 1) {
       const zeroPlayersCount = newPlayers.filter(p => p.currentScore === 0).length;
       if (zeroPlayersCount === 1) {
-         const winnerObj = newPlayers.find(p => p.currentScore === 0);
+         const winnerIdx = newPlayers.findIndex(p => p.currentScore === 0);
+         const winnerObj = { ...newPlayers[winnerIdx] };
          winnerObj.legsWon += 1;
+         newPlayers[winnerIdx] = winnerObj;
          setPlayers(newPlayers);
-         handleMatchWin(winnerObj);
+         handleMatchWin(winnerObj, newPlayers);
          return;
       } else if (zeroPlayersCount > 1) {
          // Sudden Death Triggers!
@@ -249,9 +253,9 @@ export default function Play({ onMatchComplete }) {
     setInputVal('');
   };
 
-  const handleMatchWin = async (winner) => {
+  const handleMatchWin = async (winner, latestPlayers = players) => {
     setIsSaving(true);
-    const participantIds = players.map(p => p.id);
+    const participantIds = latestPlayers.map(p => p.id);
     try {
       await submitMatchData(winner.id, participantIds, bestScores, matchTurns, startingScore);
       await onMatchComplete();
@@ -321,7 +325,7 @@ export default function Play({ onMatchComplete }) {
               
               <div className={clsx("bg-black/30 flex justify-center text-white/90 font-bold tracking-wider uppercase relative z-10", isGrid ? "p-1.5 text-[10px]" : "p-3 text-xs md:text-sm")}>
                 {(() => {
-                  const pTurns = matchTurns.filter(t => t.playerId === p.id && !t.isBust);
+                  const pTurns = (matchTurns || []).filter(t => t && t.playerId === p.id && !t.isBust);
                   const pSum = pTurns.reduce((acc, t) => acc + t.score, 0);
                   const pAvg = pTurns.length > 0 ? (pSum / pTurns.length).toFixed(1) : '0.0';
                   return <span>Avg: {pAvg}</span>;

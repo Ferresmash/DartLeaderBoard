@@ -4,7 +4,8 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function Home({ players, matches }) {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState('7_days'); // '7_days', '30_days', 'all_time', 'best_score'
+  const [timeSpan, setTimeSpan] = useState('7_days');
+  const [statType, setStatType] = useState('wins');
   const [onlyBigFour, setOnlyBigFour] = useState(false);
   
   const BIG_FOUR_IDS = ['ferdinand', 'max', 'emil', 'ted'];
@@ -18,45 +19,82 @@ export default function Home({ players, matches }) {
         activeMatches = matches.filter(m => m.participantIds && BIG_FOUR_IDS.every(id => m.participantIds.includes(id)));
       }
       
-      const playerMatches = activeMatches.filter(m => m.winnerId === p.id);
-      
-      const filteredWins = playerMatches.filter(m => {
-        if (filter === 'all_time') return true;
+      const timeFilteredMatches = activeMatches.filter(m => {
+        if (timeSpan === 'all_time') return true;
         const diffDays = (now - m.timestamp) / (1000 * 60 * 60 * 24);
-        if (filter === '7_days') return diffDays <= 7;
-        if (filter === '30_days') return diffDays <= 30;
+        if (timeSpan === '7_days') return diffDays <= 7;
+        if (timeSpan === '30_days') return diffDays <= 30;
         return true;
-      }).length;
+      });
 
-      let computedTotalWins = playerMatches.length;
+      const playerWinnerMatches = timeFilteredMatches.filter(m => m.winnerId === p.id);
+      const filteredWins = playerWinnerMatches.length;
+
+      let computedTotalWins = playerWinnerMatches.length;
       let computedBestScore = 0;
+      let computedHighestCheckout = 0;
+      let nineDartTotals = [];
       
-      if (onlyBigFour) {
-        activeMatches.forEach(m => {
-          if (m.turns) {
-            m.turns.forEach(t => {
-              if (t.playerId === p.id && t.score > computedBestScore) {
-                computedBestScore = t.score;
-              }
-            });
+      const pool = timeFilteredMatches;
+
+      pool.forEach(m => {
+        if (!m.turns) return;
+        const playerTurns = m.turns.filter(t => t.playerId === p.id);
+        if (playerTurns.length === 0) return;
+
+        // ── Avg 9 Darts: first 3 turns = 9 darts ──
+        const firstThree = playerTurns.slice(0, 3);
+        nineDartTotals.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
+
+        // ── Best Score (highest single turn score) ──
+        playerTurns.forEach(t => {
+          if (!t.isBust && t.score > computedBestScore) {
+            computedBestScore = t.score;
           }
         });
-      }
+
+        // ── Highest Checkout: simulate running score ──
+        let running = m.startingScore || 501;
+        playerTurns.forEach(t => {
+          if (t.isBust) return; // bust: score stays same, running unchanged
+          running -= t.score;
+          if (running === 0) {
+            if (t.score > computedHighestCheckout) computedHighestCheckout = t.score;
+            running = m.startingScore || 501; // next leg in same match
+          }
+          if (running < 0) running += t.score; // guard against bad data
+        });
+      });
+
+      const avgNineDarts = nineDartTotals.length > 0 ? Number((nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length).toFixed(1)) : 0;
 
       return {
         ...p,
         filteredWins,
-        totalWins: onlyBigFour ? computedTotalWins : p.totalWins,
-        bestScore: onlyBigFour ? computedBestScore : (p.bestScore || 0)
+        totalWins: p.totalWins,
+        bestScore: computedBestScore,
+        highestCheckout: computedHighestCheckout,
+        avgNineDarts: avgNineDarts
       };
-    }).sort((a, b) => filter === 'best_score' ? (b.bestScore||0) - (a.bestScore||0) : (b.filteredWins - a.filteredWins) || (b.totalWins - a.totalWins) || (b.bestScore - a.bestScore));
-  }, [players, matches, filter, onlyBigFour]);
+    }).sort((a, b) => {
+      if (statType === 'best_score') return (b.bestScore||0) - (a.bestScore||0);
+      if (statType === 'highest_checkout') return (b.highestCheckout||0) - (a.highestCheckout||0);
+      if (statType === 'avg_nine_darts') return (b.avgNineDarts||0) - (a.avgNineDarts||0);
+      return (b.filteredWins - a.filteredWins) || (b.totalWins - a.totalWins) || (b.bestScore - a.bestScore);
+    });
+  }, [players, matches, timeSpan, statType, onlyBigFour]);
 
-  const filterLabels = {
+  const statLabels = {
+    'wins': 'Total Wins',
+    'best_score': 'Highest Score',
+    'highest_checkout': 'Highest Checkout',
+    'avg_nine_darts': 'First 9 Darts Avg'
+  };
+
+  const timeLabels = {
     '7_days': 'Last 7 Days',
     '30_days': 'Last 30 Days',
-    'all_time': 'All Time',
-    'best_score': 'Top High Scores'
+    'all_time': 'All Time'
   };
 
   return (
@@ -71,7 +109,7 @@ export default function Home({ players, matches }) {
             </h1>
             <p className="text-slate-400 font-medium tracking-wide flex items-center gap-2 md:text-lg">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              {filterLabels[filter]} Standings
+              {timeLabels[timeSpan]}: {statLabels[statType]}
             </p>
           </div>
           
@@ -84,18 +122,33 @@ export default function Home({ players, matches }) {
               <span className="text-slate-300 font-bold text-sm select-none">Big 4 Matches</span>
             </label>
 
-            <div className="relative group">
-              <select 
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
-              >
-                <option value="7_days" className="bg-slate-900">Last 7 Days</option>
-                <option value="30_days" className="bg-slate-900">Last 30 Days</option>
-                <option value="all_time" className="bg-slate-900">All Time Wins</option>
-                <option value="best_score" className="bg-slate-900">Highest Score</option>
-              </select>
-              <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-indigo-300 transition-colors" />
+            <div className="relative group flex gap-2">
+              <div className="relative group/time">
+                <select 
+                  value={timeSpan}
+                  onChange={(e) => setTimeSpan(e.target.value)}
+                  className="appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
+                >
+                  <option value="7_days" className="bg-slate-900">Last 7 Days</option>
+                  <option value="30_days" className="bg-slate-900">Last 30 Days</option>
+                  <option value="all_time" className="bg-slate-900">All Time</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/time:text-indigo-300 transition-colors" />
+              </div>
+
+              <div className="relative group/stat">
+                <select 
+                  value={statType}
+                  onChange={(e) => setStatType(e.target.value)}
+                  className="appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
+                >
+                  <option value="wins" className="bg-slate-900">Wins</option>
+                  <option value="best_score" className="bg-slate-900">Highest Score</option>
+                  <option value="highest_checkout" className="bg-slate-900">Highest Checkout</option>
+                  <option value="avg_nine_darts" className="bg-slate-900">9 Darts Avg</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/stat:text-indigo-300 transition-colors" />
+              </div>
             </div>
           </div>
         </div>
@@ -117,9 +170,9 @@ export default function Home({ players, matches }) {
           activeMatches.forEach(m => {
             const diffDays = (new Date().getTime() - m.timestamp) / (1000 * 60 * 60 * 24);
             let inTimeframe = false;
-            if (filter === 'all_time') inTimeframe = true;
-            else if (filter === '7_days') inTimeframe = diffDays <= 7;
-            else if (filter === '30_days') inTimeframe = diffDays <= 30;
+            if (timeSpan === 'all_time') inTimeframe = true;
+            else if (timeSpan === '7_days') inTimeframe = diffDays <= 7;
+            else if (timeSpan === '30_days') inTimeframe = diffDays <= 30;
 
             if (inTimeframe && m.turns) {
               m.turns.forEach(t => {
@@ -147,7 +200,7 @@ export default function Home({ players, matches }) {
             <div className="flex items-center gap-4 md:gap-6 relative z-10">
               <div className="relative w-16 h-16 md:w-28 md:h-28 shrink-0">
                 <div className={`absolute inset-0 rounded-full border-[3px] md:border-[4px] z-10 ${index === 0 && player.filteredWins > 0 ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : index === 1 && player.filteredWins > 0 ? 'border-slate-300' : index === 2 && player.filteredWins > 0 ? 'border-amber-700' : 'border-slate-700'}`}></div>
-                <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover rounded-full relative z-0" />
+                <img src={player.pfpUrl || undefined} alt={player.name} className="w-full h-full object-cover rounded-full relative z-0" />
                 {index === 0 && player.filteredWins > 0 && (
                   <div className="absolute -top-3 -right-2 md:-top-4 md:-right-4 text-2xl md:text-4xl drop-shadow-md z-20 animate-bounce">👑</div>
                 )}
@@ -156,18 +209,26 @@ export default function Home({ players, matches }) {
                 <div>
                   <h3 className="font-bold text-xl md:text-3xl text-slate-100 truncate mb-1">{player.name}</h3>
                   <div className="flex flex-wrap text-sm md:text-base gap-2 text-slate-400 mt-2">
-                    {filter === 'best_score' ? (
+                    {statType === 'best_score' ? (
                       <span className="flex items-center gap-1.5 bg-pink-500/10 text-pink-300 px-3 py-1 rounded-xl border border-pink-500/20 font-bold shadow-sm">
                         ⚡ High Score: <span className="font-black text-pink-200 ml-1">{player.bestScore}</span>
                       </span>
+                    ) : statType === 'highest_checkout' ? (
+                      <span className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 px-3 py-1 rounded-xl border border-emerald-500/20 font-bold shadow-sm">
+                        🎯 Checkout: <span className="font-black text-emerald-200 ml-1">{player.highestCheckout}</span>
+                      </span>
+                    ) : statType === 'avg_nine_darts' ? (
+                      <span className="flex items-center gap-1.5 bg-indigo-500/10 text-indigo-300 px-3 py-1 rounded-xl border border-indigo-500/20 font-bold shadow-sm">
+                        📈 9 Darts Avg: <span className="font-black text-indigo-200 ml-1">{player.avgNineDarts}</span>
+                      </span>
                     ) : (
                       <span className="flex items-center gap-1.5 bg-indigo-500/10 text-indigo-300 px-3 py-1 rounded-xl border border-indigo-500/20 font-bold shadow-sm">
-                        🏆 {filter === 'all_time' ? 'Total Wins' : 'Period Wins'}: <span className="font-black text-indigo-200 ml-1">{player.filteredWins}</span>
+                        🏆 {timeSpan === 'all_time' ? 'Total Wins' : 'Period Wins'}: <span className="font-black text-indigo-200 ml-1">{player.filteredWins}</span>
                       </span>
                     )}
-                    {filter !== 'all_time' && filter !== 'best_score' && (
+                    {statType !== 'wins' && (
                       <span className="flex items-center px-3 py-1 bg-white/5 rounded-xl border border-white/5">
-                        Total: <span className="text-slate-200 font-bold ml-1">{player.totalWins}</span>
+                        Wins: <span className="text-slate-200 font-bold ml-1">{player.filteredWins}</span>
                       </span>
                     )}
                   </div>
@@ -186,6 +247,7 @@ export default function Home({ players, matches }) {
 
                 <div className="md:hidden flex gap-3 mt-2 text-xs font-bold text-slate-400">
                   <span>Avg: <span className="text-white">{avgScore}</span></span>
+                  <span>9D: <span className="text-indigo-400">{player.avgNineDarts}</span></span>
                   <span>Busts: <span className="text-rose-400">{bustRate}%</span></span>
                 </div>
               </div>

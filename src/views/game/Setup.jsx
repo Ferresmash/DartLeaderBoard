@@ -17,9 +17,12 @@ export default function Setup() {
 
   const handleStart = () => {
     const startingScore = mode === 'custom' ? parseInt(customScore) || 301 : parseInt(mode);
+    
+    const shuffledPlayers = [...selectedPlayers].sort(() => Math.random() - 0.5);
+
     navigate('/game/play', { 
       state: { 
-        selectedPlayers, 
+        selectedPlayers: shuffledPlayers, 
         startingScore, 
         legsToWin: legs 
       } 

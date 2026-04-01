@@ -15,6 +15,7 @@ export const getPlayers = async () => {
         id: key,
         ...data[key],
         gamesPlayed: data[key].gamesPlayed !== undefined ? data[key].gamesPlayed : (data[key].totalWins || 0),
+        highestCheckout: data[key].highestCheckout || 0,
         name: localPlayer ? localPlayer.name : data[key].name,
         pfpUrl: localPlayer ? localPlayer.pfpUrl : ''
       };
@@ -110,11 +111,12 @@ export const submitMatchData = async (winnerId, participantIds, bestScores, turn
     const dbPlayers = playersSnap.val();
     
     participantIds.forEach(pId => {
-      const dbP = dbPlayers[pId] || { totalWins: 0, gamesPlayed: 0, bestScore: 0 };
+      const dbP = dbPlayers[pId] || { totalWins: 0, gamesPlayed: 0, bestScore: 0, highestCheckout: 0 };
       
       const newGamesPlayed = (dbP.gamesPlayed || dbP.totalWins || 0) + 1;
       let newTotalWins = dbP.totalWins || 0;
       let newBestScore = dbP.bestScore || 0;
+      let newHighestCheckout = dbP.highestCheckout || 0;
       
       if (pId === winnerId) {
         newTotalWins += 1;
@@ -124,10 +126,29 @@ export const submitMatchData = async (winnerId, participantIds, bestScores, turn
       if (bestScores[pId] && bestScores[pId] > newBestScore) {
         newBestScore = bestScores[pId];
       }
+
+      // Check for Highest Checkout in this match
+      if (turns && turns.length > 0) {
+        let currentTotal = startingScore;
+        const playerTurns = turns.filter(t => t.playerId === pId);
+        playerTurns.forEach(t => {
+           if (!t.isBust) {
+              currentTotal -= t.score;
+              if (currentTotal === 0) {
+                 if (t.score > newHighestCheckout) {
+                    newHighestCheckout = t.score;
+                 }
+                 // Reset for next leg
+                 currentTotal = startingScore;
+              }
+           }
+        });
+      }
       
       updates[`/players/${pId}/gamesPlayed`] = newGamesPlayed;
       updates[`/players/${pId}/totalWins`] = newTotalWins;
       updates[`/players/${pId}/bestScore`] = newBestScore;
+      updates[`/players/${pId}/highestCheckout`] = newHighestCheckout;
     });
   }
   
@@ -142,7 +163,8 @@ export const addPlayerToDb = async (name) => {
     name: name,
     totalWins: 0,
     gamesPlayed: 0,
-    bestScore: 0
+    bestScore: 0,
+    highestCheckout: 0
   };
   
   const updates = {};

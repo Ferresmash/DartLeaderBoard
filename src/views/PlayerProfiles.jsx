@@ -32,7 +32,7 @@ export default function PlayerProfiles({ players }) {
             >
               <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden mr-4 shadow-inner border border-white/10 shrink-0">
                 {player.pfpUrl ? (
-                  <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover" />
+                  <img src={player.pfpUrl || undefined} alt={player.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-slate-800 flex items-center justify-center font-black text-slate-300 uppercase text-2xl md:text-3xl tracking-widest">{player.name.substring(0,2)}</div>
                 )}
