@@ -66,7 +66,7 @@ export default function Home({ players, matches }) {
         });
       });
 
-      const avgNineDarts = nineDartTotals.length > 0 ? Number((nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length).toFixed(1)) : 0;
+      const avgNineDarts = nineDartTotals.length > 0 ? Number(((nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length) / 3).toFixed(1)) : 0;
 
       return {
         ...p,

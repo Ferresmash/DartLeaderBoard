@@ -56,7 +56,7 @@ export default function PlayerDetail({ players, matches }) {
 
     const avgNineDarts =
       nineDartTotals.length > 0
-        ? Number((nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length).toFixed(1))
+        ? Number(((nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length) / 3).toFixed(1))
         : 0;
 
     const bustPct =
@@ -125,7 +125,7 @@ export default function PlayerDetail({ players, matches }) {
 
       const avgScore = validThrows > 0 ? totalThrowScore / validThrows : 0;
       const bustRate = totalThrowsCount > 0 ? (bustCount / totalThrowsCount) * 100 : 0;
-      const avgNineDarts = nineDartTotals.length > 0 ? nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length : 0;
+      const avgNineDarts = nineDartTotals.length > 0 ? (nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length) / 3 : 0;
 
       data.push({
         name: `W${getWeekNumber(new Date(weekStart))}`,
