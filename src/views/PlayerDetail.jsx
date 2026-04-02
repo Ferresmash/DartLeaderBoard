@@ -17,6 +17,7 @@ export default function PlayerDetail({ players, matches }) {
   const navigate = useNavigate();
   const player = players.find(p => p.id === id);
   const [chartMetric, setChartMetric] = useState('wins'); // 'wins', 'winRate', 'avgScore', 'bustRate', 'highestCheckout'
+  const [selectedWeekStart, setSelectedWeekStart] = useState(null);
 
   // ── Lifetime stats (across ALL matches) ─────────────────────────────
   const lifetimeStats = useMemo(() => {
@@ -67,27 +68,49 @@ export default function PlayerDetail({ players, matches }) {
     return { highestCheckout, avgNineDarts, bustPct };
   }, [matches, player.id]);
 
-  // ── Weekly chart data ─────────────────────────────────────────────────
+  // ── Weekly/Daily chart data ───────────────────────────────────────────
   const chartData = useMemo(() => {
     const data = [];
     const now = new Date();
     
-    // Generates last 10 weeks
-    for (let i = 9; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-      // Align to start of the week (Monday)
-      const weekStart = new Date(d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1))).getTime();
-      const weekEnd = weekStart + 7 * 24 * 60 * 60 * 1000;
+    const periods = [];
+    if (selectedWeekStart === null) {
+      // Generates last 10 weeks
+      for (let i = 9; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+        // Align to start of the week (Monday)
+        const weekStart = new Date(d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1))).getTime();
+        periods.push({
+          start: weekStart,
+          end: weekStart + 7 * 24 * 60 * 60 * 1000,
+          name: `W${getWeekNumber(new Date(weekStart))}`,
+          weekStart
+        });
+      }
+    } else {
+      // Generate 7 days for the selected week
+      for (let i = 0; i < 7; i++) {
+        const dayStart = selectedWeekStart + i * 24 * 60 * 60 * 1000;
+        const dObj = new Date(dayStart);
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        periods.push({
+          start: dayStart,
+          end: dayStart + 24 * 60 * 60 * 1000,
+          name: dayNames[dObj.getDay()],
+          weekStart: null 
+        });
+      }
+    }
+
+    periods.forEach(period => {
+      const periodMatches = matches.filter(m => m.timestamp >= period.start && m.timestamp < period.end);
       
-      const weekMatches = matches.filter(m => m.timestamp >= weekStart && m.timestamp < weekEnd);
-      
-      // Calculate Games Played reliably (via participantIds if available, or fallback to older wins)
-      const gamesPlayed = weekMatches.filter(m => 
+      const gamesPlayed = periodMatches.filter(m => 
         (m.participantIds && m.participantIds.includes(player.id)) || 
         m.winnerId === player.id
       ).length;
 
-      const wins = weekMatches.filter(m => m.winnerId === player.id).length;
+      const wins = periodMatches.filter(m => m.winnerId === player.id).length;
       const winRate = gamesPlayed > 0 ? (wins / gamesPlayed) * 100 : 0;
 
       let validThrows = 0;
@@ -97,7 +120,7 @@ export default function PlayerDetail({ players, matches }) {
       let highestCheckout = 0;
       let nineDartTotals = [];
 
-      weekMatches.forEach(m => {
+      periodMatches.forEach(m => {
         if (m.turns) {
           const playerTurns = m.turns.filter(t => t.playerId === player.id);
           
@@ -128,7 +151,8 @@ export default function PlayerDetail({ players, matches }) {
       const avgNineDarts = nineDartTotals.length > 0 ? (nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length) / 3 : 0;
 
       data.push({
-        name: `W${getWeekNumber(new Date(weekStart))}`,
+        name: period.name,
+        weekStart: period.weekStart,
         wins: wins,
         winRate: Number(winRate.toFixed(1)),
         avgScore: Number(avgScore.toFixed(1)),
@@ -136,9 +160,18 @@ export default function PlayerDetail({ players, matches }) {
         highestCheckout: highestCheckout,
         avgNineDarts: Number(avgNineDarts.toFixed(1))
       });
-    }
+    });
+    
     return data;
-  }, [matches, player.id]);
+  }, [matches, player.id, selectedWeekStart]);
+
+  const handleChartClick = (data) => {
+    if (data?.activePayload?.[0]?.payload?.weekStart) {
+      setSelectedWeekStart(data.activePayload[0].payload.weekStart);
+    } else if (data?.activeTooltipIndex !== undefined && chartData[data.activeTooltipIndex]?.weekStart) {
+      setSelectedWeekStart(chartData[data.activeTooltipIndex].weekStart);
+    }
+  };
 
   if (!player) return <div className="p-8 text-center text-white">Player not found</div>;
 
@@ -228,9 +261,20 @@ export default function PlayerDetail({ players, matches }) {
 
           <div className="w-full bg-white/[0.02] border border-white/5 p-5 md:p-8 rounded-3xl shadow-xl flex-1 backdrop-blur-sm">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-              <h3 className="font-bold text-xl md:text-2xl text-slate-100 flex items-center gap-2">
-                10-Week Trend
-              </h3>
+              <div className="flex items-center gap-3">
+                {selectedWeekStart !== null && (
+                  <button 
+                    onClick={() => setSelectedWeekStart(null)}
+                    className="p-1.5 bg-white/5 hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-300 rounded-lg transition-colors border border-white/5 hover:border-indigo-500/30"
+                    title="Back to Weekly View"
+                  >
+                     <ArrowLeft className="w-5 h-5" />
+                  </button>
+                )}
+                <h3 className="font-bold text-xl md:text-2xl text-slate-100 flex items-center gap-2">
+                  {selectedWeekStart === null ? "10-Week Trend" : `Week ${getWeekNumber(new Date(selectedWeekStart))} Trend`}
+                </h3>
+              </div>
               <select 
                 value={chartMetric}
                 onChange={e => setChartMetric(e.target.value)}
@@ -246,7 +290,13 @@ export default function PlayerDetail({ players, matches }) {
             
             <div className="h-48 md:h-64 mt-4 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                <LineChart 
+                  data={chartData} 
+                  margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+                  onClick={handleChartClick}
+                  className="focus:outline-none"
+                  style={selectedWeekStart === null ? { cursor: 'pointer', outline: 'none' } : { outline: 'none' }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                   <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 12}} dy={10} axisLine={false} tickLine={false} />
                   <YAxis stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 12}} axisLine={false} tickLine={false} />
@@ -265,7 +315,14 @@ export default function PlayerDetail({ players, matches }) {
                     stroke="#818cf8" 
                     strokeWidth={4} 
                     dot={{ r: 4, fill: "#818cf8", strokeWidth: 2, stroke: "#0f172a" }} 
-                    activeDot={{ r: 8, fill: "#f472b6", stroke: "#0f172a", strokeWidth: 3 }} 
+                    activeDot={{ 
+                      onClick: (e, payload) => {
+                        if (payload?.payload?.weekStart) {
+                          setSelectedWeekStart(payload.payload.weekStart);
+                        }
+                      },
+                      r: 8, fill: "#f472b6", stroke: "#0f172a", strokeWidth: 3, cursor: 'pointer' 
+                    }} 
                     animationDuration={1500}
                     animationEasing="ease-out"
                   />
