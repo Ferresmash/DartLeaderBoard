@@ -30,6 +30,12 @@ export default function Home({ players, matches }) {
       const playerWinnerMatches = timeFilteredMatches.filter(m => m.winnerId === p.id);
       const filteredWins = playerWinnerMatches.length;
 
+      const gamesPlayed = timeFilteredMatches.filter(m => 
+        (m.participantIds && m.participantIds.includes(p.id)) || 
+        m.winnerId === p.id
+      ).length;
+      const winRate = gamesPlayed > 0 ? Number(((filteredWins / gamesPlayed) * 100).toFixed(1)) : 0;
+
       let computedTotalWins = playerWinnerMatches.length;
       let computedBestScore = 0;
       let computedHighestCheckout = 0;
@@ -72,6 +78,8 @@ export default function Home({ players, matches }) {
         ...p,
         filteredWins,
         totalWins: p.totalWins,
+        gamesPlayed,
+        winRate,
         bestScore: computedBestScore,
         highestCheckout: computedHighestCheckout,
         avgNineDarts: avgNineDarts
@@ -80,12 +88,14 @@ export default function Home({ players, matches }) {
       if (statType === 'best_score') return (b.bestScore||0) - (a.bestScore||0);
       if (statType === 'highest_checkout') return (b.highestCheckout||0) - (a.highestCheckout||0);
       if (statType === 'avg_nine_darts') return (b.avgNineDarts||0) - (a.avgNineDarts||0);
+      if (statType === 'win_rate') return (b.winRate||0) - (a.winRate||0) || (b.filteredWins - a.filteredWins);
       return (b.filteredWins - a.filteredWins) || (b.totalWins - a.totalWins) || (b.bestScore - a.bestScore);
     });
   }, [players, matches, timeSpan, statType, onlyBigFour]);
 
   const statLabels = {
     'wins': 'Total Wins',
+    'win_rate': 'Win Rate',
     'best_score': 'Highest Score',
     'highest_checkout': 'Highest Checkout',
     'avg_nine_darts': 'First 9 Darts Avg'
@@ -143,6 +153,7 @@ export default function Home({ players, matches }) {
                   className="w-full appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-3 md:py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
                 >
                   <option value="wins" className="bg-slate-900">Wins</option>
+                  <option value="win_rate" className="bg-slate-900">Win Rate</option>
                   <option value="best_score" className="bg-slate-900">Highest Score</option>
                   <option value="highest_checkout" className="bg-slate-900">Highest Checkout</option>
                   <option value="avg_nine_darts" className="bg-slate-900">9 Darts Avg</option>
@@ -212,6 +223,10 @@ export default function Home({ players, matches }) {
                     {statType === 'best_score' ? (
                       <span className="flex items-center gap-1.5 bg-pink-500/10 text-pink-300 px-3 py-1 rounded-xl border border-pink-500/20 font-bold shadow-sm">
                         ⚡ High Score: <span className="font-black text-pink-200 ml-1">{player.bestScore}</span>
+                      </span>
+                    ) : statType === 'win_rate' ? (
+                      <span className="flex items-center gap-1.5 bg-cyan-500/10 text-cyan-300 px-3 py-1 rounded-xl border border-cyan-500/20 font-bold shadow-sm">
+                        📊 Win Rate: <span className="font-black text-cyan-200 ml-1">{player.winRate}%</span>
                       </span>
                     ) : statType === 'highest_checkout' ? (
                       <span className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 px-3 py-1 rounded-xl border border-emerald-500/20 font-bold shadow-sm">
