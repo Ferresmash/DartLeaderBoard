@@ -18,7 +18,13 @@ export default function MatchesList({ matches, players }) {
 
         <div className="flex flex-col gap-4 w-full mb-8">
           {matches.map(match => {
-            const winner = players.find(p => p.id === match.winnerId);
+            let winnerName = match.winnerId ? players.find(p => p.id === match.winnerId)?.name : 'Unknown';
+            if ((!winnerName || winnerName === 'Unknown') && match.winnerId?.startsWith('guest__')) {
+              try {
+                winnerName = decodeURIComponent(match.winnerId.split('__')[1]) + ' (Guest)';
+              } catch(e) {}
+            }
+
             const pCount = match.participantIds?.length || (match.turns ? new Set(match.turns.map(t=>t.playerId)).size : 1);
             
             return (
@@ -39,7 +45,7 @@ export default function MatchesList({ matches, players }) {
                     )}
                   </div>
                   <h3 className="font-bold text-xl md:text-2xl text-slate-100 truncate flex items-center gap-2">
-                    Winner: <span className="text-indigo-300">{winner?.name || 'Unknown'}</span>
+                    Winner: <span className="text-indigo-300">{winnerName || 'Unknown'}</span>
                   </h3>
                   <div className="flex items-center gap-1.5 text-sm text-slate-400 mt-1 font-medium">
                     <Users className="w-4 h-4" />

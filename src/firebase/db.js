@@ -111,6 +111,9 @@ export const submitMatchData = async (winnerId, participantIds, bestScores, turn
     const dbPlayers = playersSnap.val();
     
     participantIds.forEach(pId => {
+      // Don't sync stats for guests
+      if (pId.startsWith('guest_')) return;
+      
       const dbP = dbPlayers[pId] || { totalWins: 0, gamesPlayed: 0, bestScore: 0, highestCheckout: 0 };
       
       const newGamesPlayed = (dbP.gamesPlayed || dbP.totalWins || 0) + 1;

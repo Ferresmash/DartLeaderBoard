@@ -1,12 +1,30 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Settings2, Circle, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Settings2, Circle, CheckCircle2, ChevronLeft, ChevronRight, UserPlus, X } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function Lobby({ players }) {
   const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState([]);
   const [page, setPage] = useState(0);
+  const [customGuests, setCustomGuests] = useState([]);
+  const [guestName, setGuestName] = useState('');
+
+  const handleAddGuest = (e) => {
+    e.preventDefault();
+    if (!guestName.trim()) return;
+    const newGuest = {
+      id: `guest__${encodeURIComponent(guestName.trim())}__${Date.now()}`,
+      name: guestName.trim(),
+      isGuest: true
+    };
+    setCustomGuests([...customGuests, newGuest]);
+    setGuestName('');
+  };
+
+  const removeGuest = (id) => {
+    setCustomGuests(prev => prev.filter(g => g.id !== id));
+  };
 
   const priorityIds = ['ferdinand', 'max', 'emil', 'ted'];
   
@@ -28,8 +46,8 @@ export default function Lobby({ players }) {
   };
 
   const handleNext = () => {
-    if (selectedIds.length === 0) return;
-    const selectedPlayers = players.filter(p => selectedIds.includes(p.id));
+    if (selectedIds.length === 0 && customGuests.length === 0) return;
+    const selectedPlayers = players.filter(p => selectedIds.includes(p.id)).concat(customGuests);
     navigate('/game/setup', { state: { selectedPlayers } });
   };
 
@@ -91,12 +109,59 @@ export default function Lobby({ players }) {
           </div>
         )}
 
+        <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 md:p-8 mb-8 shadow-inner">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+             <div className="flex items-center gap-3">
+               <div className="p-2 bg-indigo-500/20 rounded-xl">
+                 <UserPlus className="w-6 h-6 text-indigo-400" />
+               </div>
+               <div>
+                  <h3 className="font-bold text-xl text-slate-100">Add Guest</h3>
+                  <p className="text-slate-400 text-sm">Play with someone not on the leaderboard</p>
+               </div>
+             </div>
+             
+             <form onSubmit={handleAddGuest} className="flex gap-2 w-full md:w-auto">
+               <input 
+                 type="text" 
+                 value={guestName} 
+                 onChange={(e) => setGuestName(e.target.value)}
+                 placeholder="Guest name" 
+                 className="flex-1 md:w-48 bg-slate-900 border border-slate-700/50 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+               />
+               <button 
+                 type="submit"
+                 disabled={!guestName.trim()}
+                 className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 whitespace-nowrap"
+               >
+                 Add
+               </button>
+             </form>
+          </div>
+
+          {customGuests.length > 0 && (
+             <div className="flex flex-wrap gap-3 animate-in fade-in slide-in-from-top-4">
+               {customGuests.map(g => (
+                 <div key={g.id} className="flex items-center gap-2 bg-slate-900 border border-slate-700/50 rounded-full pl-4 pr-2 py-1.5 shadow-sm">
+                   <span className="text-slate-200 font-bold tracking-tight">{g.name}</span>
+                   <button 
+                     onClick={() => removeGuest(g.id)}
+                     className="w-6 h-6 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors"
+                   >
+                     <X className="w-4 h-4" />
+                   </button>
+                 </div>
+               ))}
+             </div>
+          )}
+        </div>
+
       </div>
       
       <div className="max-w-4xl mx-auto w-full">
         <button
           onClick={handleNext}
-          disabled={selectedIds.length === 0}
+          disabled={selectedIds.length === 0 && customGuests.length === 0}
           className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black uppercase tracking-wider py-5 rounded-3xl shadow-lg shadow-indigo-500/25 transition-all active:scale-[0.98] text-xl"
         >
           <span>Continue to Setup</span>
