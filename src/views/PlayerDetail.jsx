@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trophy, Target, TrendingUp, Skull } from 'lucide-react';
+import { ArrowLeft, Trophy, Target, TrendingUp, Skull, Calendar, User, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -164,6 +164,16 @@ export default function PlayerDetail({ players, matches }) {
     
     return data;
   }, [matches, player.id, selectedWeekStart]);
+
+  // ── Player Matches list ──────────────────────────────────────────────
+  const playerMatches = useMemo(() => {
+    return matches
+      .filter(m => 
+        (m.participantIds && m.participantIds.includes(player.id)) || 
+        m.winnerId === player.id
+      )
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  }, [matches, player.id]);
 
   const handleChartClick = (data) => {
     if (data?.activePayload?.[0]?.payload?.weekStart) {
@@ -331,6 +341,84 @@ export default function PlayerDetail({ players, matches }) {
             </div>
           </div>
 
+          <div className="w-full mt-12 mb-8">
+            <h3 className="font-bold text-xl md:text-2xl text-slate-100 mb-6 flex items-center gap-3">
+              <Calendar className="w-6 h-6 text-indigo-400" />
+              Match History
+            </h3>
+            
+            <div className="grid gap-3">
+              {playerMatches.length > 0 ? (
+                playerMatches.map(m => {
+                  const pIds = m.participantIds || (m.turns ? [...new Set(m.turns.map(t => t.playerId))] : []);
+                  const opponents = players.filter(p => pIds.includes(p.id) && p.id !== player.id);
+                  const isWinner = m.winnerId === player.id;
+                  const date = m.timestamp ? new Date(m.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown Date';
+                  
+                  // Handle guest names for opponents if any
+                  let opponentText = opponents.length > 0 ? opponents.map(o => o.name).join(', ') : 'Unknown';
+                  if (opponents.length === 0 && pIds.length > 1) {
+                     // Might be guests
+                     const guestIds = pIds.filter(pid => pid !== player.id && pid.startsWith('guest__'));
+                     if (guestIds.length > 0) {
+                        opponentText = guestIds.map(gid => {
+                           try { return decodeURIComponent(gid.split('__')[1]) + ' (Guest)'; }
+                           catch(e) { return 'Guest'; }
+                        }).join(', ');
+                     }
+                  }
+                  
+                  return (
+                    <div 
+                      key={m.id}
+                      onClick={() => navigate(`/matches/${m.id}`)}
+                      className={`group p-4 md:p-5 rounded-3xl cursor-pointer transition-all duration-300 border flex items-center justify-between relative overflow-hidden ${
+                        isWinner 
+                          ? 'bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/40 shadow-lg shadow-emerald-500/5' 
+                          : 'bg-rose-500/10 border-rose-500/20 hover:bg-rose-500/20 hover:border-rose-500/40 shadow-lg shadow-rose-500/5'
+                      }`}
+                    >
+                      {/* Status Indicator Bar */}
+                      <div className={`absolute left-0 top-0 bottom-0 w-2 ${isWinner ? 'bg-emerald-500' : 'bg-rose-500'} shadow-[0_0_15px_rgba(0,0,0,0.3)]`}></div>
+                      
+                      <div className="flex items-center gap-4 md:gap-6 pl-3">
+                        <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${isWinner ? 'bg-emerald-400/20 text-emerald-400' : 'bg-rose-400/20 text-rose-400'}`}>
+                           {isWinner ? <Trophy className="w-6 h-6 md:w-8 md:h-8" /> : <Skull className="w-6 h-6 md:w-8 md:h-8" />}
+                        </div>
+                        
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-white font-black text-lg md:text-xl tracking-tight">{isWinner ? 'Victory' : 'Defeat'}</span>
+                            <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">• {date}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-slate-400 text-sm font-medium">
+                            <User className="w-4 h-4 text-slate-500" />
+                            <span className="truncate max-w-[140px] md:max-w-xs">
+                              vs {opponentText}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <div className="hidden md:flex flex-col items-end mr-6">
+                           <span className="text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-0.5">Start Score</span>
+                           <span className="text-white font-black text-xl">{m.startingScore || 501}</span>
+                        </div>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 group-hover:bg-white/10 transition-colors">
+                          <ChevronRight className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="bg-white/[0.02] border border-dashed border-white/10 rounded-3xl p-12 flex flex-col items-center justify-center text-slate-500">
+                  <p className="font-medium italic">No matches recorded yet</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
       
