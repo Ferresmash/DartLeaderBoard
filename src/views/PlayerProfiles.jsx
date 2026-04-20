@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { User, ChevronRight } from 'lucide-react';
+import { User, ChevronRight, TrendingUp } from 'lucide-react';
 
 export default function PlayerProfiles({ players }) {
   const navigate = useNavigate();
@@ -16,9 +16,19 @@ export default function PlayerProfiles({ players }) {
     <div className="p-6 md:p-10 pb-28 min-h-[100dvh] bg-slate-950 font-sans">
       <div className="max-w-4xl mx-auto md:pt-4">
         <header className="mb-8">
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2 md:mb-4 flex items-center gap-3">
-             <User className="w-8 h-8 md:w-10 md:h-10 text-indigo-400" />
-             <span className="text-white">Statistics</span>
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2 md:mb-4 flex flex-wrap items-center gap-3">
+             <div className="flex items-center gap-3">
+               <User className="w-8 h-8 md:w-10 md:h-10 text-indigo-400" />
+               <span className="text-white">Statistics</span>
+             </div>
+             <button 
+              onClick={() => navigate('/compare')}
+              className="group flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl text-sm font-bold hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-all shadow-lg active:scale-95 ml-auto md:ml-4"
+             >
+               <TrendingUp className="w-4 h-4" />
+               <span>Go to graph...</span>
+               <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+             </button>
           </h1>
           <p className="text-slate-400 font-medium md:text-lg">Detailed performance profiles for all competitors.</p>
         </header>

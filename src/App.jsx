@@ -9,6 +9,7 @@ import GameSetup from './views/game/Setup';
 import GamePlay from './views/game/Play';
 import MatchesList from './views/MatchesList';
 import MatchDetail from './views/MatchDetail';
+import CompareStats from './views/CompareStats';
 import { useEffect, useState } from 'react';
 import { getPlayers, getMatches } from './firebase/db';
 
@@ -53,13 +54,14 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home players={players} matches={matches} />} />
             <Route path="/add" element={<AddPlayer onPlayerAdded={fetchData} />} />
-            <Route path="/profile" element={<PlayerProfiles players={players} />} />
+            <Route path="/profile" element={<PlayerProfiles players={players} matches={matches} />} />
             <Route path="/profile/:id" element={<PlayerDetail players={players} matches={matches} />} />
             <Route path="/game" element={<GameLobby players={players} />} />
             <Route path="/game/setup" element={<GameSetup />} />
             <Route path="/game/play" element={<GamePlay onMatchComplete={fetchData} />} />
             <Route path="/matches" element={<MatchesList matches={matches} players={players} />} />
             <Route path="/matches/:id" element={<MatchDetail matches={matches} players={players} />} />
+            <Route path="/compare" element={<CompareStats players={players} matches={matches} />} />
           </Routes>
         </div>
       </div>

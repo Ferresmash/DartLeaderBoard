@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp } from 'lucide-react';
 
 export default function Home({ players, matches }) {
   const navigate = useNavigate();
@@ -114,7 +114,7 @@ export default function Home({ players, matches }) {
         
         <div className="relative z-10 w-full flex flex-col md:flex-row md:justify-between md:items-end gap-6 mb-2">
           <div className="w-full md:w-auto">
-            <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2 flex items-center gap-3">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2 flex flex-wrap items-center gap-3 md:gap-4">
                <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent drop-shadow-sm">Dartboard</span>
             </h1>
             <p className="text-slate-400 font-medium tracking-wide flex items-center gap-2 md:text-lg">
