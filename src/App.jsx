@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import Navigation from './components/Navigation';
 import Home from './views/Home';
 import AddPlayer from './views/AddPlayer';
@@ -47,7 +47,7 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="min-h-[100dvh] bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 overflow-x-hidden">
         <Navigation />
         <div className="max-w-md md:max-w-5xl mx-auto w-full min-h-[100dvh] pt-0 md:pt-28 pb-20 md:pb-0 relative transition-all duration-300">
@@ -65,6 +65,6 @@ export default function App() {
           </Routes>
         </div>
       </div>
-    </BrowserRouter>
+    </HashRouter>
   );
 }

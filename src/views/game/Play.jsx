@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { submitMatchData } from '../../firebase/db';
-import { Trophy, ChevronLeft, Delete, Check, Target, Skull, Settings, X, Plus, Zap } from 'lucide-react';
+import { Trophy, ChevronLeft, Delete, Check, Target, Skull, Settings, X, Zap } from 'lucide-react';
 import { getCheckout } from '../../utils/checkouts';
 import clsx from 'clsx';
 
@@ -23,36 +23,57 @@ export default function Play({ onMatchComplete }) {
   const location = useLocation();
   const navigate = useNavigate();
   
-  if (!location.state?.selectedPlayers) {
+  // Persistence Loading Logic
+  const savedGameStr = localStorage.getItem('activeDartsGame');
+  const savedGame = savedGameStr ? JSON.parse(savedGameStr) : null;
+  const isNewGame = !!location.state?.selectedPlayers;
+
+  if (!isNewGame && !savedGame) {
     return <Navigate to="/game" />;
   }
-  
-  const { selectedPlayers, startingScore, legsToWin } = location.state;
 
-  const [players, setPlayers] = useState(() => 
-    selectedPlayers.map((p, i) => ({
-      ...p,
-      currentScore: startingScore,
-      legsWon: 0,
-      dartsThrown: 0,
-      bgColor: BG_COLORS[i % BG_COLORS.length]
-    }))
-  );
+  const startingScore = isNewGame ? location.state.startingScore : savedGame.startingScore;
+  const legsToWin = isNewGame ? location.state.legsToWin : savedGame.legsToWin;
+
+  const [players, setPlayers] = useState(() => {
+    if (isNewGame) {
+      return location.state.selectedPlayers.map((p, i) => ({
+        ...p,
+        currentScore: startingScore,
+        legsWon: 0,
+        dartsThrown: 0,
+        bgColor: BG_COLORS[i % BG_COLORS.length]
+      }));
+    }
+    return savedGame.players;
+  });
   
-  const [activeIdx, setActiveIdx] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(isNewGame ? 0 : savedGame.activeIdx);
   const [inputVal, setInputVal] = useState('');
-  const [history, setHistory] = useState([]);
-  const [matchTurns, setMatchTurns] = useState([]);
-  const [bestScores, setBestScores] = useState({});
+  const [history, setHistory] = useState(isNewGame ? [] : savedGame.history);
+  const [matchTurns, setMatchTurns] = useState(isNewGame ? [] : savedGame.matchTurns);
+  const [bestScores, setBestScores] = useState(isNewGame ? {} : savedGame.bestScores);
   const [isSaving, setIsSaving] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [checkoutConfirmScore, setCheckoutConfirmScore] = useState(null);
 
   // Sudden Death State
-  const [isSuddenDeath, setIsSuddenDeath] = useState(false);
-  const [suddenDeathPlayers, setSuddenDeathPlayers] = useState([]);
-  const [suddenDeathScores, setSuddenDeathScores] = useState({});
-  
-  const activePlayer = players[activeIdx];
+  const [isSuddenDeath, setIsSuddenDeath] = useState(isNewGame ? false : savedGame.isSuddenDeath);
+  const [suddenDeathPlayers, setSuddenDeathPlayers] = useState(isNewGame ? [] : savedGame.suddenDeathPlayers);
+  const [suddenDeathScores, setSuddenDeathScores] = useState(isNewGame ? {} : savedGame.suddenDeathScores);
+
+  // Persistence Saving Hook
+  useEffect(() => {
+    if (players && players.length > 0) {
+      localStorage.setItem('activeDartsGame', JSON.stringify({
+        players, activeIdx, history, matchTurns, bestScores, 
+        isSuddenDeath, suddenDeathPlayers, suddenDeathScores,
+        startingScore, legsToWin
+      }));
+    }
+  }, [players, activeIdx, history, matchTurns, bestScores, isSuddenDeath, suddenDeathPlayers, suddenDeathScores, startingScore, legsToWin]);
+
+  const activePlayer = players[activeIdx] || players[0];
   const isGrid = players.length > 3;
 
   const handleKeypad = (val) => {
@@ -228,6 +249,12 @@ export default function Play({ onMatchComplete }) {
   const submitScore = () => {
     if (!inputVal) return;
     const sum = inputVal.split('+').reduce((acc, curr) => acc + (parseInt(curr) || 0), 0);
+    
+    if (!isSuddenDeath && activePlayer.currentScore - sum === 0) {
+      setCheckoutConfirmScore(sum);
+      return;
+    }
+
     finalizeTurn(sum, false);
   };
 
@@ -255,6 +282,7 @@ export default function Play({ onMatchComplete }) {
 
   const handleMatchWin = async (winner, latestPlayers = players) => {
     setIsSaving(true);
+    localStorage.removeItem('activeDartsGame'); // Clear on match complete
     const participantIds = latestPlayers.map(p => p.id);
     try {
       await submitMatchData(winner.id, participantIds, bestScores, matchTurns, startingScore);
@@ -420,11 +448,44 @@ export default function Play({ onMatchComplete }) {
             <h2 className="text-2xl font-black text-white mb-2">Abandon Match?</h2>
             <p className="text-slate-400 font-medium mb-8">Leaving now will discard all unsaved scores and turn data.</p>
             <div className="flex flex-col gap-3">
-              <button onClick={() => navigate('/')} className="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-xl transition-colors text-lg shadow-lg shadow-rose-500/20 active:scale-95">
+              <button onClick={() => { localStorage.removeItem('activeDartsGame'); navigate('/'); }} className="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-xl transition-colors text-lg shadow-lg shadow-rose-500/20 active:scale-95">
                 Yes, Leave Game
               </button>
               <button onClick={() => setShowExitModal(false)} className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-xl transition-colors text-lg active:scale-95">
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {checkoutConfirmScore !== null && (
+        <div className="fixed inset-0 z-[300] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-[32px] p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex flex-col items-center text-center mb-8 mt-2">
+              <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mb-5 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                <Target className="w-10 h-10" />
+              </div>
+              <h2 className="text-3xl md:text-3xl font-black text-white mb-2 tracking-tight">Did {activePlayer.name.split(' ')[0]} checkout?</h2>
+              <p className="text-slate-300 font-medium text-lg">Score entered:  <strong className="text-emerald-400 font-black">{checkoutConfirmScore}</strong></p>
+            </div>
+            
+            <div className="flex gap-3">
+              <button 
+                 onClick={() => {
+                   const score = checkoutConfirmScore;
+                   setCheckoutConfirmScore(null);
+                   finalizeTurn(score, false);
+                 }} 
+                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-black py-4 rounded-2xl transition-all text-xl shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
+              >
+                Yes
+              </button>
+              <button 
+                 onClick={() => setCheckoutConfirmScore(null)} 
+                 className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/5 font-bold py-4 rounded-2xl transition-colors active:scale-95 text-xl"
+              >
+                No
               </button>
             </div>
           </div>
