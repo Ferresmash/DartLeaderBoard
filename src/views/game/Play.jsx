@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { submitMatchData } from '../../firebase/db';
 import { Trophy, ChevronLeft, Delete, Check, Target, Skull, Settings, X, Zap } from 'lucide-react';
@@ -28,16 +28,12 @@ export default function Play({ onMatchComplete }) {
   const savedGame = savedGameStr ? JSON.parse(savedGameStr) : null;
   const isNewGame = !!location.state?.selectedPlayers;
 
-  if (!isNewGame && !savedGame) {
-    return <Navigate to="/game" />;
-  }
-
-  const startingScore = isNewGame ? location.state.startingScore : savedGame.startingScore;
-  const legsToWin = isNewGame ? location.state.legsToWin : savedGame.legsToWin;
+  const startingScore = isNewGame ? location.state?.startingScore : savedGame?.startingScore ?? 501;
+  const legsToWin = isNewGame ? location.state?.legsToWin : savedGame?.legsToWin ?? 1;
 
   const [players, setPlayers] = useState(() => {
     if (isNewGame) {
-      return location.state.selectedPlayers.map((p, i) => ({
+      return (location.state?.selectedPlayers || []).map((p, i) => ({
         ...p,
         currentScore: startingScore,
         legsWon: 0,
@@ -45,22 +41,22 @@ export default function Play({ onMatchComplete }) {
         bgColor: BG_COLORS[i % BG_COLORS.length]
       }));
     }
-    return savedGame.players;
+    return savedGame?.players || [];
   });
   
-  const [activeIdx, setActiveIdx] = useState(isNewGame ? 0 : savedGame.activeIdx);
+  const [activeIdx, setActiveIdx] = useState(isNewGame ? 0 : savedGame?.activeIdx ?? 0);
   const [inputVal, setInputVal] = useState('');
-  const [history, setHistory] = useState(isNewGame ? [] : savedGame.history);
-  const [matchTurns, setMatchTurns] = useState(isNewGame ? [] : savedGame.matchTurns);
-  const [bestScores, setBestScores] = useState(isNewGame ? {} : savedGame.bestScores);
+  const [history, setHistory] = useState(isNewGame ? [] : savedGame?.history || []);
+  const [matchTurns, setMatchTurns] = useState(isNewGame ? [] : savedGame?.matchTurns || []);
+  const [bestScores, setBestScores] = useState(isNewGame ? {} : savedGame?.bestScores || {});
   const [isSaving, setIsSaving] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [checkoutConfirmScore, setCheckoutConfirmScore] = useState(null);
 
   // Sudden Death State
-  const [isSuddenDeath, setIsSuddenDeath] = useState(isNewGame ? false : savedGame.isSuddenDeath);
-  const [suddenDeathPlayers, setSuddenDeathPlayers] = useState(isNewGame ? [] : savedGame.suddenDeathPlayers);
-  const [suddenDeathScores, setSuddenDeathScores] = useState(isNewGame ? {} : savedGame.suddenDeathScores);
+  const [isSuddenDeath, setIsSuddenDeath] = useState(isNewGame ? false : savedGame?.isSuddenDeath ?? false);
+  const [suddenDeathPlayers, setSuddenDeathPlayers] = useState(isNewGame ? [] : savedGame?.suddenDeathPlayers || []);
+  const [suddenDeathScores, setSuddenDeathScores] = useState(isNewGame ? {} : savedGame?.suddenDeathScores || {});
 
   // Persistence Saving Hook
   useEffect(() => {
@@ -72,6 +68,39 @@ export default function Play({ onMatchComplete }) {
       }));
     }
   }, [players, activeIdx, history, matchTurns, bestScores, isSuddenDeath, suddenDeathPlayers, suddenDeathScores, startingScore, legsToWin]);
+
+  // Track isSaving in a ref so popstate event listener can read the current value without being recreated
+  const isSavingRef = useRef(isSaving);
+  useEffect(() => {
+    isSavingRef.current = isSaving;
+  }, [isSaving]);
+
+  // Handle hardware/system back button to prevent accidental match abandonment
+  useEffect(() => {
+    // Push a dummy state to history to create an entry the user can "go back" from
+    window.history.pushState(null, null, window.location.href);
+
+    const handlePopState = () => {
+      // If we are currently saving, let the back action proceed normally
+      if (isSavingRef.current) return;
+
+      // Show the same exit confirmation dialog as abandon match
+      setShowExitModal(true);
+
+      // Re-push a dummy state to keep the back-navigation blocker active
+      window.history.pushState(null, null, window.location.href);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  if (!isNewGame && !savedGame) {
+    return <Navigate to="/game" />;
+  }
 
   const activePlayer = players[activeIdx] || players[0];
   const isGrid = players.length > 3;

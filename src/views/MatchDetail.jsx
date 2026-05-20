@@ -12,7 +12,7 @@ export default function MatchDetail({ matches, players }) {
 
   if (!match) return <Navigate to="/matches" />;
 
-  const { chartData, participantList, highestScore, highestScorer, winner } = useMemo(() => {
+  const { chartData, participantList, playerStats, highestScore, highestScorer, winner } = useMemo(() => {
     const startingScore = match.startingScore || 501;
     const pIds = match.participantIds || [];
     
@@ -45,13 +45,46 @@ export default function MatchDetail({ matches, players }) {
       });
     }
 
-    const w = players.find(p => p.id === match.winnerId);
-    const h = players.find(p => p.id === pHighId);
-    const pList = players.filter(p => pIds.includes(p.id));
+    const resolvePlayer = (id) => {
+      const found = players.find(p => p.id === id);
+      if (found) return found;
+      if (id && id.startsWith('guest__')) {
+        return {
+          id,
+          name: decodeURIComponent(id.split('__')[1]),
+          isGuest: true
+        };
+      }
+      return null;
+    };
+
+    const w = resolvePlayer(match.winnerId);
+    const h = resolvePlayer(pHighId);
+    const pList = pIds.map(resolvePlayer).filter(Boolean);
+
+    const pStats = pList.map((p, i) => {
+      const pTurns = (match.turns || []).filter(t => t.playerId === p.id && !t.isBust);
+      const totalScore = pTurns.reduce((sum, t) => sum + t.score, 0);
+      const avg = pTurns.length > 0 ? (totalScore / pTurns.length).toFixed(1) : '0.0';
+      const high = pTurns.length > 0 ? Math.max(...pTurns.map(t => t.score)) : 0;
+      
+      const firstThreeTurns = pTurns.slice(0, 3);
+      const nineDartSum = firstThreeTurns.reduce((sum, t) => sum + t.score, 0);
+      const avg9 = (nineDartSum / 3).toFixed(1);
+
+      return {
+        ...p,
+        avg,
+        high,
+        avg9,
+        color: STROKE_COLORS[i % STROKE_COLORS.length]
+      };
+    });
 
     return {
       chartData: dataPoints,
       participantList: pList,
+      playerStats: pStats,
       highestScore: pHigh,
       highestScorer: h,
       winner: w
@@ -153,6 +186,46 @@ export default function MatchDetail({ matches, players }) {
               </LineChart>
             </ResponsiveContainer>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+          {playerStats.map((p) => (
+            <div key={p.id} className="bg-white/[0.03] border border-white/10 rounded-[2.5rem] p-6 backdrop-blur-md relative overflow-hidden group hover:bg-white/[0.05] transition-all duration-500 shadow-2xl">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-white/10 transition-colors"></div>
+              
+              <div className="flex items-center gap-5 mb-8 relative z-10">
+                <div className="relative">
+                  {p.pfpUrl ? (
+                    <img src={p.pfpUrl} alt={p.name} className="w-16 h-16 rounded-2xl object-cover border-2 border-white/10 shadow-lg" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center font-black text-slate-300 text-xl border-2 border-white/10 shadow-lg">
+                      {p.name.substring(0,2).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-slate-950" style={{ backgroundColor: p.color }}></div>
+                </div>
+                <div>
+                  <h4 className="text-xl font-black text-white leading-tight">{p.name}</h4>
+                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-0.5">Participant</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 relative z-10">
+                <div className="bg-black/20 rounded-2xl p-3 border border-white/5 flex flex-col items-center justify-center text-center">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter mb-1">Avg Score</span>
+                  <span className="text-lg font-black text-indigo-400 leading-none">{p.avg}</span>
+                </div>
+                <div className="bg-black/20 rounded-2xl p-3 border border-white/5 flex flex-col items-center justify-center text-center">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter mb-1">Highest</span>
+                  <span className="text-lg font-black text-amber-400 leading-none">{p.high}</span>
+                </div>
+                <div className="bg-black/20 rounded-2xl p-3 border border-white/5 flex flex-col items-center justify-center text-center">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter mb-1">9 Dart Avg</span>
+                  <span className="text-lg font-black text-emerald-400 leading-none">{p.avg9}</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
 
       </div>
