@@ -314,7 +314,7 @@ export default function Home({ players, matches }) {
                 </div>
                 
                 {/* Leaderboard List */}
-                <div className="flex flex-col gap-3 rounded-3xl overflow-y-auto pr-2 max-h-[800px] custom-scrollbar">
+                <div className="flex flex-col gap-3 rounded-3xl pr-2 custom-scrollbar">
                     {leaderboard.map((player, index) => {
                         const isSelected = selectedPlayerId === player.id;
                         
@@ -322,12 +322,18 @@ export default function Home({ players, matches }) {
                         <div 
                             key={player.id} 
                             onClick={() => setSelectedPlayerId(player.id)}
-                            className={`relative cursor-pointer overflow-hidden rounded-3xl p-4 transition-all duration-300 backdrop-blur-sm shadow-xl group border ${isSelected ? 'bg-indigo-500/10 border-indigo-500/40 ring-1 ring-indigo-500/30' : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06]'}`}
+                            className={`relative cursor-pointer overflow-hidden rounded-3xl py-5 px-5 md:px-6 transition-all duration-300 backdrop-blur-sm shadow-xl group border ${isSelected ? 'bg-indigo-500/10 border-indigo-500/40 ring-1 ring-indigo-500/30' : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06]'}`}
                         >
                             <div className="flex items-center gap-4 relative z-10">
                                 <div className="relative w-14 h-14 shrink-0">
                                     <div className={`absolute inset-0 rounded-full border-[3px] z-10 transition-colors ${isSelected ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : index === 0 && player.filteredWins > 0 ? 'border-amber-400' : 'border-slate-700'}`}></div>
-                                    <img src={player.pfpUrl || undefined} alt={player.name} className="w-full h-full object-cover rounded-full relative z-0" />
+                                    {player.pfpUrl ? (
+                                        <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover rounded-full relative z-0" />
+                                    ) : (
+                                        <div className="w-full h-full rounded-full bg-slate-800 flex items-center justify-center font-black text-slate-300 uppercase text-lg border border-white/10 shadow-inner relative z-0">
+                                            {player.name.substring(0, 2).toUpperCase()}
+                                        </div>
+                                    )}
                                     {index === 0 && player.filteredWins > 0 && !isSelected && (
                                         <div className="absolute -top-3 -right-2 text-xl drop-shadow-md z-20">👑</div>
                                     )}
@@ -369,7 +375,13 @@ export default function Home({ players, matches }) {
                             {/* Decorative flare */}
                             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-indigo-500/20 transition-colors"></div>
                             
-                            <img onClick={() => navigate(`/profile/${selectedPlayer.id}`)} src={selectedPlayer.pfpUrl} alt={selectedPlayer.name} className="w-28 h-28 md:w-32 md:h-32 object-cover rounded-full border-[4px] border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.4)] cursor-pointer hover:scale-105 transition-transform shrink-0" />
+                            {selectedPlayer.pfpUrl ? (
+                                <img onClick={() => navigate(`/profile/${selectedPlayer.id}`)} src={selectedPlayer.pfpUrl} alt={selectedPlayer.name} className="w-28 h-28 md:w-32 md:h-32 object-cover rounded-full border-[4px] border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.4)] cursor-pointer hover:scale-105 transition-transform shrink-0" />
+                            ) : (
+                                <div onClick={() => navigate(`/profile/${selectedPlayer.id}`)} className="w-28 h-28 md:w-32 md:h-32 rounded-full border-[4px] border-indigo-500 bg-slate-800 flex items-center justify-center font-black text-slate-200 text-3xl shadow-[0_0_20px_rgba(99,102,241,0.4)] cursor-pointer hover:scale-105 transition-transform shrink-0 uppercase select-none">
+                                    {selectedPlayer.name.substring(0, 2).toUpperCase()}
+                                </div>
+                            )}
                             
                             <div className="flex-1 min-w-0 text-center sm:text-left z-10">
                                 <h2 onClick={() => navigate(`/profile/${selectedPlayer.id}`)} className="text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight cursor-pointer hover:text-indigo-300 transition-colors break-words leading-tight">{selectedPlayer.name}</h2>
