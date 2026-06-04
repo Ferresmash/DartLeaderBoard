@@ -2,9 +2,8 @@ import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
-  // Using the specific Realtime Database URL provided by the user
-  projectId: "dart-a68d0",
-  databaseURL: "https://dart-a68d0-default-rtdb.europe-west1.firebasedatabase.app"
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL
 };
 
 // Initialize Firebase
