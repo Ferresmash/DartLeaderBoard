@@ -10,7 +10,9 @@ export const getPlayers = async () => {
   if (snapshot.exists()) {
     const data = snapshot.val();
     return Object.keys(data).map(key => {
-      const localPlayer = initialPlayers.find(p => p.id === key);
+      const localPlayer =
+        initialPlayers.find(p => p.id === key) ||
+        initialPlayers.find(p => p.name === data[key].name);
       return {
         id: key,
         ...data[key],
