@@ -15,20 +15,38 @@ export default function Home({ players, matches }) {
   const navigate = useNavigate();
   const [timeSpan, setTimeSpan] = useState('7_days');
   const [statType, setStatType] = useState('wins');
-  const [onlyBigFour, setOnlyBigFour] = useState(false);
+  const [onlyInOffice, setOnlyInOffice] = useState(true);
   
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [selectedWeekStart, setSelectedWeekStart] = useState(null);
 
-  const BIG_FOUR_IDS = ['ferdinand', 'max', 'emil', 'ted'];
+  const isInOfficeMatch = (m) => {
+    if (!m || !m.timestamp) return false;
+    const date = new Date(m.timestamp);
+    const day = date.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+    const hour = date.getHours(); // 0 - 23
+
+    // Work hours: Mon-Fri (1-5), 7:00 to 18:00 (hour >= 7 && hour < 18)
+    const isWorkHours = day >= 1 && day <= 5 && hour >= 7 && hour < 18;
+    if (!isWorkHours) return false;
+
+    // Played with more than one from the company (> 1 company player)
+    if (!m.participantIds || !Array.isArray(m.participantIds)) return false;
+
+    const companyParticipants = m.participantIds.filter(
+      id => typeof id === 'string' && !id.startsWith('guest')
+    );
+
+    return companyParticipants.length > 1;
+  };
 
   const leaderboard = useMemo(() => {
     const now = new Date().getTime();
     
     return players.map(p => {
       let activeMatches = matches;
-      if (onlyBigFour) {
-        activeMatches = matches.filter(m => m.participantIds && BIG_FOUR_IDS.every(id => m.participantIds.includes(id)));
+      if (onlyInOffice) {
+        activeMatches = matches.filter(isInOfficeMatch);
       }
       
       const timeFilteredMatches = activeMatches.filter(m => {
@@ -117,14 +135,14 @@ export default function Home({ players, matches }) {
       if (statType === 'win_rate') return (b.winRate||0) - (a.winRate||0) || (b.filteredWins - a.filteredWins);
       return (b.filteredWins - a.filteredWins) || (b.totalWins - a.totalWins) || (b.bestScore - a.bestScore);
     });
-  }, [players, matches, timeSpan, statType, onlyBigFour]);
+  }, [players, matches, timeSpan, statType, onlyInOffice]);
 
   // Auto-select the #1 player whenever the leaderboard sorting filters change
   useEffect(() => {
     if (leaderboard.length > 0) {
         setSelectedPlayerId(leaderboard[0].id);
     }
-  }, [timeSpan, statType, onlyBigFour]); // Trigger only on filter changes
+  }, [timeSpan, statType, onlyInOffice]); // Trigger only on filter changes
 
   // Fallback to ensure we have a valid selection if the selected player disappears
   useEffect(() => {
@@ -169,8 +187,8 @@ export default function Home({ players, matches }) {
 
     periods.forEach(period => {
       let activeMatches = matches.filter(m => m.timestamp >= period.start && m.timestamp < period.end);
-      if (onlyBigFour) {
-        activeMatches = activeMatches.filter(m => m.participantIds && BIG_FOUR_IDS.every(id => m.participantIds.includes(id)));
+      if (onlyInOffice) {
+        activeMatches = activeMatches.filter(isInOfficeMatch);
       }
 
       const gamesPlayed = activeMatches.filter(m => 
@@ -232,7 +250,7 @@ export default function Home({ players, matches }) {
     });
     
     return data;
-  }, [matches, selectedPlayerId, selectedWeekStart, onlyBigFour]);
+  }, [matches, selectedPlayerId, selectedWeekStart, onlyInOffice]);
 
   const statLabels = {
     'wins': 'Total Wins',
@@ -278,14 +296,14 @@ export default function Home({ players, matches }) {
               </p>
             </div>
             
-            {/* Global Settings (Time, Big 4, Stat Type is handled below globally) */}
+            {/* Global Settings (Time, In Office, Stat Type is handled below globally) */}
             <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
                 <label className="flex items-center gap-2 cursor-pointer bg-white/5 border border-white/10 px-4 py-3 md:py-2 rounded-xl hover:bg-white/10 transition-colors backdrop-blur-sm shadow-md h-full w-full sm:w-auto whitespace-nowrap">
-                  <input type="checkbox" className="hidden" checked={onlyBigFour} onChange={() => setOnlyBigFour(!onlyBigFour)} />
-                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${onlyBigFour ? 'bg-indigo-500 border-indigo-400' : 'bg-transparent border-slate-500'}`}>
-                    {onlyBigFour && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
+                  <input type="checkbox" className="hidden" checked={onlyInOffice} onChange={() => setOnlyInOffice(!onlyInOffice)} />
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${onlyInOffice ? 'bg-indigo-500 border-indigo-400' : 'bg-transparent border-slate-500'}`}>
+                    {onlyInOffice && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
                   </div>
-                  <span className="text-slate-300 font-bold text-sm select-none">Big 4 Matches</span>
+                  <span className="text-slate-300 font-bold text-sm select-none">In Office</span>
                 </label>
 
                 <div className="relative group/time flex-1 sm:flex-initial">
