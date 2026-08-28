@@ -318,6 +318,22 @@ export default function Home({ players, matches }) {
                   </select>
                   <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-4 md:right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/time:text-indigo-300 transition-colors" />
                 </div>
+
+                {/* Mobile Stat Type Selector (directly under Last 7 Days dropdown on mobile) */}
+                <div className="relative group/stat block md:hidden w-full">
+                  <select 
+                    value={statType}
+                    onChange={(e) => setStatType(e.target.value)}
+                    className="w-full appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-3 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm backdrop-blur-sm shadow-lg"
+                  >
+                    {Object.entries(statLabels).map(([key, label]) => (
+                      <option key={key} value={key} className="bg-slate-900">
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none group-hover/stat:text-indigo-300 transition-colors" />
+                </div>
             </div>
         </div>
 
@@ -327,28 +343,28 @@ export default function Home({ players, matches }) {
                 <div className="flex justify-between items-center px-2">
                     <h2 className="text-xl font-bold text-slate-200">Leaderboard</h2>
                     <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
-                       Sorted by {statLabels[statType]}
+                       Top 7 • Sorted by {statLabels[statType]}
                     </span>
                 </div>
                 
                 {/* Leaderboard List */}
-                <div className="flex flex-col gap-3 rounded-3xl pr-2 custom-scrollbar">
-                    {leaderboard.map((player, index) => {
+                <div className="flex flex-col gap-3 rounded-3xl p-1 pr-2 max-h-[580px] overflow-y-auto custom-scrollbar">
+                    {leaderboard.slice(0, 7).map((player, index) => {
                         const isSelected = selectedPlayerId === player.id;
                         
                         return (
                         <div 
                             key={player.id} 
-                            onClick={() => setSelectedPlayerId(player.id)}
-                            className={`relative cursor-pointer overflow-hidden rounded-3xl py-5 px-5 md:px-6 transition-all duration-300 backdrop-blur-sm shadow-xl group border ${isSelected ? 'bg-indigo-500/10 border-indigo-500/40 ring-1 ring-indigo-500/30' : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06]'}`}
+                            onClick={() => navigate(`/profile/${player.id}`)}
+                            className={`relative cursor-pointer overflow-hidden rounded-2xl md:rounded-3xl py-3.5 md:py-5 px-4 md:px-6 transition-all duration-300 backdrop-blur-sm shadow-xl group border ${isSelected ? 'bg-indigo-500/10 border-indigo-500/40 ring-1 ring-indigo-500/30' : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06]'}`}
                         >
-                            <div className="flex items-center gap-4 relative z-10">
-                                <div className="relative w-14 h-14 shrink-0">
+                            <div className="flex items-center gap-3 md:gap-4 relative z-10">
+                                <div className="relative w-12 h-12 md:w-14 md:h-14 shrink-0">
                                     <div className={`absolute inset-0 rounded-full border-[3px] z-10 transition-colors ${isSelected ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : index === 0 && player.filteredWins > 0 ? 'border-amber-400' : 'border-slate-700'}`}></div>
                                     {player.pfpUrl ? (
                                         <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover rounded-full relative z-0" />
                                     ) : (
-                                        <div className="w-full h-full rounded-full bg-slate-800 flex items-center justify-center font-black text-slate-300 uppercase text-lg border border-white/10 shadow-inner relative z-0">
+                                        <div className="w-full h-full rounded-full bg-slate-800 flex items-center justify-center font-black text-slate-300 uppercase text-base md:text-lg border border-white/10 shadow-inner relative z-0">
                                             {player.name.substring(0, 2).toUpperCase()}
                                         </div>
                                     )}
@@ -357,9 +373,9 @@ export default function Home({ players, matches }) {
                                     )}
                                 </div>
                                 
-                                <div className="flex-1 min-w-0">
-                                    <h3 className={`font-bold text-xl truncate mb-0.5 ${isSelected ? 'text-white' : 'text-slate-200'}`}>{player.name}</h3>
-                                    <div className="flex flex-wrap text-sm gap-2 mt-1">
+                                <div className="flex-1 min-w-0 pr-8 md:pr-10">
+                                    <h3 className={`font-bold text-lg md:text-xl truncate mb-0.5 ${isSelected ? 'text-white' : 'text-slate-200'}`}>{player.name}</h3>
+                                    <div className="flex flex-wrap text-xs md:text-sm gap-2 mt-0.5">
                                         {statType === 'best_score' ? (
                                             <span className={`font-bold ${isSelected ? 'text-pink-300' : 'text-slate-400'}`}>Score: <span className={isSelected ? 'text-pink-200 font-black' : 'text-white'}>{player.bestScore}</span></span>
                                         ) : statType === 'win_rate' ? (
@@ -374,7 +390,7 @@ export default function Home({ players, matches }) {
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end">
-                                    <span className="text-[40px] md:text-[50px] font-black text-white/[0.05] leading-none select-none italic absolute right-2 -bottom-2 pointer-events-none group-hover:text-white/[0.08] transition-colors">
+                                    <span className="text-[32px] md:text-[50px] font-black text-white/[0.05] leading-none select-none italic absolute right-3 bottom-1 pointer-events-none group-hover:text-white/[0.08] transition-colors">
                                         #{index + 1}
                                     </span>
                                 </div>
@@ -420,8 +436,8 @@ export default function Home({ players, matches }) {
                             </div>
                         </div>
 
-                        {/* Interactive Stat Selectors */}
-                        <div className="bg-white/[0.02] border border-white/5 p-3 rounded-3xl flex flex-wrap gap-2 shadow-lg justify-center">
+                        {/* Interactive Stat Selectors (Desktop only) */}
+                        <div className="hidden md:flex bg-white/[0.02] border border-white/5 p-3 rounded-3xl flex-wrap gap-2 shadow-lg justify-center">
                             {Object.entries(statLabels).map(([key, label]) => (
                                 <button
                                     key={key}
@@ -434,7 +450,7 @@ export default function Home({ players, matches }) {
                         </div>
 
                         {/* Graph Panel */}
-                        <div className="bg-white/[0.02] border border-white/5 p-6 md:p-8 rounded-[2rem] shadow-xl flex-1 backdrop-blur-sm min-h-[400px] flex flex-col">
+                        <div className="bg-white/[0.02] border border-white/5 p-6 md:p-8 rounded-[2rem] shadow-xl backdrop-blur-sm flex flex-col">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                                 <div className="flex items-center gap-3">
                                     {selectedWeekStart !== null && (
@@ -453,16 +469,16 @@ export default function Home({ players, matches }) {
                                 </div>
                             </div>
                             
-                            <div className="flex-1 w-full relative min-h-[250px]">
+                            <div className="w-full relative h-[280px] md:h-[320px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart 
                                         data={chartData} 
-                                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                                        margin={{ top: 10, right: 15, left: -20, bottom: 25 }}
                                         onClick={handleChartClick}
                                         style={selectedWeekStart === null ? { cursor: 'pointer', outline: 'none' } : { outline: 'none' }}
                                     >
                                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600}} dy={15} axisLine={false} tickLine={false} />
+                                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 600}} dy={8} axisLine={false} tickLine={false} />
                                         <YAxis stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600}} axisLine={false} tickLine={false} />
                                         <Tooltip 
                                             contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(99,102,241,0.3)', borderRadius: '16px', color: '#f8fafc', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}

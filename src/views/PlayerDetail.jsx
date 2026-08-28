@@ -302,13 +302,13 @@ export default function PlayerDetail({ players, matches }) {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart 
                   data={chartData} 
-                  margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+                  margin={{ top: 5, right: 15, left: -20, bottom: 25 }}
                   onClick={handleChartClick}
                   className="focus:outline-none"
                   style={selectedWeekStart === null ? { cursor: 'pointer', outline: 'none' } : { outline: 'none' }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 12}} dy={10} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 11}} dy={8} axisLine={false} tickLine={false} />
                   <YAxis stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 12}} axisLine={false} tickLine={false} />
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(99,102,241,0.2)', borderRadius: '16px', color: '#f8fafc', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}

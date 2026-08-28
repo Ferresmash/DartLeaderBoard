@@ -26,12 +26,34 @@ export default function Lobby({ players }) {
     setCustomGuests(prev => prev.filter(g => g.id !== id));
   };
 
-  const priorityIds = ['ferdinand', 'max', 'emil', 'ted'];
+  const topPriority = ['ferdinand', 'ted', 'petrus', 'chanique'];
+  const backPriority = ['emil', 'max'];
+
+  const getPlayerPriority = (p) => {
+    const pId = (p.id || '').toLowerCase();
+    const pName = (p.name || '').toLowerCase();
+
+    for (let i = 0; i < topPriority.length; i++) {
+      const target = topPriority[i];
+      if (pId === target || pName.includes(target)) {
+        return i;
+      }
+    }
+
+    for (let i = 0; i < backPriority.length; i++) {
+      const target = backPriority[i];
+      if (pId === target || pName.includes(target)) {
+        return 1000 + i;
+      }
+    }
+
+    return 500;
+  };
   
-  // Sort heavily prioritizing the big four
+  // Sort prioritizing Ferdinand & Ted at top, Petrus & Chanique under, others, and Emil & Max further back
   const sortedPlayers = [...players].sort((a, b) => {
-    const aPriority = priorityIds.includes(a.id) ? priorityIds.indexOf(a.id) : 999;
-    const bPriority = priorityIds.includes(b.id) ? priorityIds.indexOf(b.id) : 999;
+    const aPriority = getPlayerPriority(a);
+    const bPriority = getPlayerPriority(b);
     if (aPriority !== bPriority) return aPriority - bPriority;
     return a.name.localeCompare(b.name);
   });

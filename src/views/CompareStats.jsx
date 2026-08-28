@@ -5,7 +5,49 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 export default function CompareStats({ players, matches }) {
   const navigate = useNavigate();
-  const [selectedPlayerIds, setSelectedPlayerIds] = useState(players.map(p => p.id).slice(0, 3));
+
+  const topPriority = ['ferdinand', 'ted', 'petrus', 'chanique'];
+  const backPriority = ['emil', 'max'];
+
+  const getPlayerPriority = (p) => {
+    const pId = (p.id || '').toLowerCase();
+    const pName = (p.name || '').toLowerCase();
+
+    for (let i = 0; i < topPriority.length; i++) {
+      const target = topPriority[i];
+      if (pId === target || pName.includes(target)) {
+        return i;
+      }
+    }
+
+    for (let i = 0; i < backPriority.length; i++) {
+      const target = backPriority[i];
+      if (pId === target || pName.includes(target)) {
+        return 1000 + i;
+      }
+    }
+
+    return 500;
+  };
+
+  const sortedPlayers = useMemo(() => {
+    return [...players].sort((a, b) => {
+      const aPriority = getPlayerPriority(a);
+      const bPriority = getPlayerPriority(b);
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      return a.name.localeCompare(b.name);
+    });
+  }, [players]);
+
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState(() => {
+    const sorted = [...players].sort((a, b) => {
+      const aPriority = getPlayerPriority(a);
+      const bPriority = getPlayerPriority(b);
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      return a.name.localeCompare(b.name);
+    });
+    return sorted.map(p => p.id).slice(0, 3);
+  });
   const [metric, setMetric] = useState('wins'); // wins, winRate, avgScore, bustRate, highestCheckout, avgNineDarts
   const [duration, setDuration] = useState('all_time'); // 7_days, 30_days, all_time
 
@@ -156,7 +198,7 @@ export default function CompareStats({ players, matches }) {
                 <h3 className="text-slate-100 font-bold uppercase tracking-wider text-sm">Select Players</h3>
               </div>
               <div className="flex flex-wrap gap-2">
-                {[...players].sort((a,b) => b.totalWins - a.totalWins).map(p => {
+                {sortedPlayers.map(p => {
                   const isSelected = selectedPlayerIds.includes(p.id);
                   const color = getPlayerColor(p.id);
                   return (
@@ -241,7 +283,7 @@ export default function CompareStats({ players, matches }) {
             </div>
           </div>
           
-          <div className="h-[400px] md:h-[500px] w-full mt-4">
+          <div className="h-[300px] md:h-[360px] w-full mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
