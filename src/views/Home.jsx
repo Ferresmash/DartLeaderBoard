@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronRight, TrendingUp, ArrowLeft, Trophy, Target, Star, Skull } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, ArrowLeft, Trophy, Target, Star, Skull, Award } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import DartFlowHeader from '../components/DartFlowHeader';
 
 function getWeekNumber(d) {
   d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -23,14 +24,12 @@ export default function Home({ players, matches }) {
   const isInOfficeMatch = (m) => {
     if (!m || !m.timestamp) return false;
     const date = new Date(m.timestamp);
-    const day = date.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
-    const hour = date.getHours(); // 0 - 23
+    const day = date.getDay();
+    const hour = date.getHours();
 
-    // Work hours: Mon-Fri (1-5), 7:00 to 18:00 (hour >= 7 && hour < 18)
     const isWorkHours = day >= 1 && day <= 5 && hour >= 7 && hour < 18;
     if (!isWorkHours) return false;
 
-    // Played with more than one from the company (> 1 company player)
     if (!m.participantIds || !Array.isArray(m.participantIds)) return false;
 
     const companyParticipants = m.participantIds.filter(
@@ -66,7 +65,6 @@ export default function Home({ players, matches }) {
       ).length;
       const winRate = gamesPlayed > 0 ? Number(((filteredWins / gamesPlayed) * 100).toFixed(1)) : 0;
 
-      let computedTotalWins = playerWinnerMatches.length;
       let computedBestScore = 0;
       let computedHighestCheckout = 0;
       let nineDartTotals = [];
@@ -82,20 +80,14 @@ export default function Home({ players, matches }) {
         const playerTurns = m.turns.filter(t => t.playerId === p.id);
         if (playerTurns.length === 0) return;
 
-        // ── Avg 9 Darts: first 3 turns = 9 darts ──
         const firstThree = playerTurns.slice(0, 3);
         nineDartTotals.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
 
-        // ── Best Score (highest single turn score) ──
+        let running = m.startingScore || 501;
         playerTurns.forEach(t => {
           if (!t.isBust && t.score > computedBestScore) {
             computedBestScore = t.score;
           }
-        });
-
-        // ── Highest Checkout: simulate running score ──
-        let running = m.startingScore || 501;
-        playerTurns.forEach(t => {
           if (t.isBust) {
               bustCount++;
           } else {
@@ -104,9 +96,9 @@ export default function Home({ players, matches }) {
               running -= t.score;
               if (running === 0) {
                 if (t.score > computedHighestCheckout) computedHighestCheckout = t.score;
-                running = m.startingScore || 501; // next leg in same match
+                running = m.startingScore || 501;
               }
-              if (running < 0) running += t.score; // guard against bad data
+              if (running < 0) running += t.score;
           }
           totalThrowsCount++;
         });
@@ -137,19 +129,17 @@ export default function Home({ players, matches }) {
     });
   }, [players, matches, timeSpan, statType, onlyInOffice]);
 
-  // Auto-select the #1 player whenever the leaderboard sorting filters change
   useEffect(() => {
     if (leaderboard.length > 0) {
-        setSelectedPlayerId(leaderboard[0].id);
+      setSelectedPlayerId(leaderboard[0].id);
     }
-  }, [timeSpan, statType, onlyInOffice]); // Trigger only on filter changes
+  }, [timeSpan, statType, onlyInOffice]);
 
-  // Fallback to ensure we have a valid selection if the selected player disappears
   useEffect(() => {
     if (leaderboard.length > 0) {
-        if (!selectedPlayerId || !leaderboard.find(p => p.id === selectedPlayerId)) {
-            setSelectedPlayerId(leaderboard[0].id);
-        }
+      if (!selectedPlayerId || !leaderboard.find(p => p.id === selectedPlayerId)) {
+        setSelectedPlayerId(leaderboard[0].id);
+      }
     }
   }, [leaderboard, selectedPlayerId]);
 
@@ -158,7 +148,6 @@ export default function Home({ players, matches }) {
     const data = [];
     const now = new Date();
     
-    // Determine periods based on selectedWeekStart (10 weeks vs daily)
     const periods = [];
     if (selectedWeekStart === null) {
       for (let i = 9; i >= 0; i--) {
@@ -202,10 +191,6 @@ export default function Home({ players, matches }) {
       let best_score = 0;
       let highest_checkout = 0;
       let nineDartTotals = [];
-      let totalThrowsCount = 0;
-      let bustCount = 0;
-      let validThrows = 0;
-      let totalThrowScore = 0;
 
       activeMatches.forEach(m => {
         if (!m.turns) return;
@@ -217,26 +202,20 @@ export default function Home({ players, matches }) {
 
         let currentTotal = m.startingScore || 501;
         playerTurns.forEach(t => {
-            if (!t.isBust && t.score > best_score) {
-              best_score = t.score;
+          if (!t.isBust && t.score > best_score) {
+            best_score = t.score;
+          }
+          if (!t.isBust) {
+            currentTotal -= t.score;
+            if (currentTotal === 0 && t.score > highest_checkout) {
+              highest_checkout = t.score;
             }
-            if (!t.isBust) {
-              validThrows++;
-              totalThrowScore += t.score;
-              currentTotal -= t.score;
-              if (currentTotal === 0 && t.score > highest_checkout) {
-                highest_checkout = t.score;
-              }
-              if (currentTotal === 0) currentTotal = m.startingScore || 501;
-            }
-            totalThrowsCount++;
-            if (t.isBust) bustCount++;
+            if (currentTotal === 0) currentTotal = m.startingScore || 501;
+          }
         });
       });
 
       const avg_nine_darts = nineDartTotals.length > 0 ? (nineDartTotals.reduce((a, b) => a + b, 0) / nineDartTotals.length) / 3 : 0;
-      const avgScore = validThrows > 0 ? totalThrowScore / validThrows : 0;
-      const bustRate = totalThrowsCount > 0 ? (bustCount / totalThrowsCount) * 100 : 0;
 
       data.push({
         name: period.name,
@@ -277,248 +256,261 @@ export default function Home({ players, matches }) {
   const selectedPlayer = leaderboard.find(p => p.id === selectedPlayerId);
 
   return (
-    <div className="pb-28 min-h-[100dvh] bg-slate-950 flex justify-center items-start pt-8 px-4 md:px-8">
-      {/* Background elements */}
-      <div className="absolute top-0 w-full h-[500px] bg-gradient-to-b from-indigo-900/30 to-transparent -z-10 pointer-events-none"></div>
+    <div className="min-h-[100dvh] bg-[#0a0e17] font-sans pb-28 md:pb-12 flex flex-col">
+      <DartFlowHeader />
 
-      {/* Main Dashboard Wrapping Panel */}
-      <div className="w-full max-w-[1400px] bg-white/[0.02] border border-white/5 rounded-[2rem] shadow-2xl backdrop-blur-xl p-4 md:p-8 flex flex-col gap-8">
-        
-        {/* Dashboard Header */}
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-white/10 pb-6">
-            <div>
-              <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2">
-                 <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent drop-shadow-sm">Stats Dashboard</span>
-              </h1>
-              <p className="text-slate-400 font-medium tracking-wide flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                In-depth analytics and live leaderboard
-              </p>
+      <div className="max-w-[1300px] mx-auto w-full px-4 md:px-8 py-6 flex flex-col gap-6">
+        {/* Top Header Controls */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-[#131b2a] border border-white/[0.08] p-4 md:p-6 rounded-3xl shadow-xl">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
+              <span>Leaderboard & Analytics</span>
+            </h1>
+            <p className="text-slate-400 text-xs font-semibold mt-0.5 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#00f0a8] shadow-[0_0_8px_#00f0a8]" />
+              Live office performance rankings
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+            {/* In Office Filter */}
+            <label className="flex items-center gap-2 cursor-pointer bg-[#0e1420] border border-white/10 px-3 py-2 rounded-xl text-xs font-bold text-slate-300 hover:border-[#00f0a8]/40 transition-colors">
+              <input type="checkbox" className="hidden" checked={onlyInOffice} onChange={() => setOnlyInOffice(!onlyInOffice)} />
+              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${onlyInOffice ? 'bg-[#00f0a8] border-[#00f0a8]' : 'border-slate-500'}`}>
+                {onlyInOffice && <div className="w-1.5 h-1.5 bg-[#0a0e17] rounded-sm" />}
+              </div>
+              <span>In Office</span>
+            </label>
+
+            {/* Time Span Filter */}
+            <div className="relative">
+              <select 
+                value={timeSpan}
+                onChange={(e) => setTimeSpan(e.target.value)}
+                className="appearance-none bg-[#0e1420] border border-white/10 text-white px-3.5 py-2 pr-8 rounded-xl font-bold text-xs focus:outline-none focus:border-[#00f0a8] cursor-pointer"
+              >
+                <option value="7_days" className="bg-[#131b2a]">Last 7 Days</option>
+                <option value="30_days" className="bg-[#131b2a]">Last 30 Days</option>
+                <option value="all_time" className="bg-[#131b2a]">All Time</option>
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
-            
-            {/* Global Settings (Time, In Office, Stat Type is handled below globally) */}
-            <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-                <label className="flex items-center gap-2 cursor-pointer bg-white/5 border border-white/10 px-4 py-3 md:py-2 rounded-xl hover:bg-white/10 transition-colors backdrop-blur-sm shadow-md h-full w-full sm:w-auto whitespace-nowrap">
-                  <input type="checkbox" className="hidden" checked={onlyInOffice} onChange={() => setOnlyInOffice(!onlyInOffice)} />
-                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${onlyInOffice ? 'bg-indigo-500 border-indigo-400' : 'bg-transparent border-slate-500'}`}>
-                    {onlyInOffice && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
-                  </div>
-                  <span className="text-slate-300 font-bold text-sm select-none">In Office</span>
-                </label>
 
-                <div className="relative group/time flex-1 sm:flex-initial">
-                  <select 
-                    value={timeSpan}
-                    onChange={(e) => setTimeSpan(e.target.value)}
-                    className="w-full appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-3 md:py-2 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm md:text-base backdrop-blur-sm shadow-lg h-full"
-                  >
-                    <option value="7_days" className="bg-slate-900">Last 7 Days</option>
-                    <option value="30_days" className="bg-slate-900">Last 30 Days</option>
-                    <option value="all_time" className="bg-slate-900">All Time</option>
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-4 md:right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/time:text-indigo-300 transition-colors" />
-                </div>
-
-                {/* Mobile Stat Type Selector (directly under Last 7 Days dropdown on mobile) */}
-                <div className="relative group/stat block md:hidden w-full">
-                  <select 
-                    value={statType}
-                    onChange={(e) => setStatType(e.target.value)}
-                    className="w-full appearance-none bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-3 pr-10 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-indigo-500/20 transition-colors cursor-pointer text-sm backdrop-blur-sm shadow-lg"
-                  >
-                    {Object.entries(statLabels).map(([key, label]) => (
-                      <option key={key} value={key} className="bg-slate-900">
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none group-hover/stat:text-indigo-300 transition-colors" />
-                </div>
+            {/* Stat Type Filter (Mobile) */}
+            <div className="relative md:hidden w-full">
+              <select 
+                value={statType}
+                onChange={(e) => setStatType(e.target.value)}
+                className="w-full appearance-none bg-[#0e1420] border border-white/10 text-white px-3.5 py-2 pr-8 rounded-xl font-bold text-xs focus:outline-none focus:border-[#00f0a8]"
+              >
+                {Object.entries(statLabels).map(([key, label]) => (
+                  <option key={key} value={key} className="bg-[#131b2a]">{label}</option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
+          </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8">
-            {/* LEFT SIDE: Leaderboard */}
-            <div className="w-full lg:w-[40%] flex flex-col gap-4">
-                <div className="flex justify-between items-center px-2">
-                    <h2 className="text-xl font-bold text-slate-200">Leaderboard</h2>
-                    <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
-                       Top 7 • Sorted by {statLabels[statType]}
-                    </span>
-                </div>
-                
-                {/* Leaderboard List */}
-                <div className="flex flex-col gap-3 rounded-3xl p-1 pr-2 max-h-[580px] overflow-y-auto custom-scrollbar">
-                    {leaderboard.slice(0, 7).map((player, index) => {
-                        const isSelected = selectedPlayerId === player.id;
-                        
-                        return (
-                        <div 
-                            key={player.id} 
-                            onClick={() => navigate(`/profile/${player.id}`)}
-                            className={`relative cursor-pointer overflow-hidden rounded-2xl md:rounded-3xl py-3.5 md:py-5 px-4 md:px-6 transition-all duration-300 backdrop-blur-sm shadow-xl group border ${isSelected ? 'bg-indigo-500/10 border-indigo-500/40 ring-1 ring-indigo-500/30' : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06]'}`}
-                        >
-                            <div className="flex items-center gap-3 md:gap-4 relative z-10">
-                                <div className="relative w-12 h-12 md:w-14 md:h-14 shrink-0">
-                                    <div className={`absolute inset-0 rounded-full border-[3px] z-10 transition-colors ${isSelected ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)]' : index === 0 && player.filteredWins > 0 ? 'border-amber-400' : 'border-slate-700'}`}></div>
-                                    {player.pfpUrl ? (
-                                        <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover rounded-full relative z-0" />
-                                    ) : (
-                                        <div className="w-full h-full rounded-full bg-slate-800 flex items-center justify-center font-black text-slate-300 uppercase text-base md:text-lg border border-white/10 shadow-inner relative z-0">
-                                            {player.name.substring(0, 2).toUpperCase()}
-                                        </div>
-                                    )}
-                                    {index === 0 && player.filteredWins > 0 && !isSelected && (
-                                        <div className="absolute -top-3 -right-2 text-xl drop-shadow-md z-20">👑</div>
-                                    )}
-                                </div>
-                                
-                                <div className="flex-1 min-w-0 pr-8 md:pr-10">
-                                    <h3 className={`font-bold text-lg md:text-xl truncate mb-0.5 ${isSelected ? 'text-white' : 'text-slate-200'}`}>{player.name}</h3>
-                                    <div className="flex flex-wrap text-xs md:text-sm gap-2 mt-0.5">
-                                        {statType === 'best_score' ? (
-                                            <span className={`font-bold ${isSelected ? 'text-pink-300' : 'text-slate-400'}`}>Score: <span className={isSelected ? 'text-pink-200 font-black' : 'text-white'}>{player.bestScore}</span></span>
-                                        ) : statType === 'win_rate' ? (
-                                            <span className={`font-bold ${isSelected ? 'text-cyan-300' : 'text-slate-400'}`}>Win %: <span className={isSelected ? 'text-cyan-200 font-black' : 'text-white'}>{player.winRate}%</span></span>
-                                        ) : statType === 'highest_checkout' ? (
-                                            <span className={`font-bold ${isSelected ? 'text-emerald-300' : 'text-slate-400'}`}>CO: <span className={isSelected ? 'text-emerald-200 font-black' : 'text-white'}>{player.highestCheckout}</span></span>
-                                        ) : statType === 'avg_nine_darts' ? (
-                                            <span className={`font-bold ${isSelected ? 'text-indigo-300' : 'text-slate-400'}`}>9D: <span className={isSelected ? 'text-indigo-200 font-black' : 'text-white'}>{player.avgNineDarts}</span></span>
-                                        ) : (
-                                            <span className={`font-bold ${isSelected ? 'text-indigo-300' : 'text-slate-400'}`}>Wins: <span className={isSelected ? 'text-indigo-200 font-black' : 'text-white'}>{player.filteredWins}</span></span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-end">
-                                    <span className="text-[32px] md:text-[50px] font-black text-white/[0.05] leading-none select-none italic absolute right-3 bottom-1 pointer-events-none group-hover:text-white/[0.08] transition-colors">
-                                        #{index + 1}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    )})}
-                </div>
+        {/* 2-Column Dashboard Body */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Left Column: Leaderboard List */}
+          <div className="w-full lg:w-[42%] flex flex-col gap-3">
+            <div className="flex justify-between items-center px-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Top Competitors</span>
+              <span className="text-[11px] font-extrabold text-[#00f0a8] bg-[#00f0a8]/10 px-2.5 py-0.5 rounded-full border border-[#00f0a8]/20">
+                Sorted by {statLabels[statType]}
+              </span>
             </div>
 
-            {/* RIGHT SIDE: Player Info & Graph Details */}
-            <div className="w-full lg:w-[60%] flex flex-col gap-6">
-                {selectedPlayer ? (
-                    <>
-                        {/* Selected Player Identity and Value Banner */}
-                        <div className="bg-gradient-to-br from-white/[0.05] to-transparent border border-white/10 p-6 md:p-8 rounded-[2rem] shadow-2xl flex flex-col sm:flex-row items-center gap-6 relative overflow-hidden group">
-                            {/* Decorative flare */}
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-indigo-500/20 transition-colors"></div>
-                            
-                            {selectedPlayer.pfpUrl ? (
-                                <img onClick={() => navigate(`/profile/${selectedPlayer.id}`)} src={selectedPlayer.pfpUrl} alt={selectedPlayer.name} className="w-28 h-28 md:w-32 md:h-32 object-cover rounded-full border-[4px] border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.4)] cursor-pointer hover:scale-105 transition-transform shrink-0" />
-                            ) : (
-                                <div onClick={() => navigate(`/profile/${selectedPlayer.id}`)} className="w-28 h-28 md:w-32 md:h-32 rounded-full border-[4px] border-indigo-500 bg-slate-800 flex items-center justify-center font-black text-slate-200 text-3xl shadow-[0_0_20px_rgba(99,102,241,0.4)] cursor-pointer hover:scale-105 transition-transform shrink-0 uppercase select-none">
-                                    {selectedPlayer.name.substring(0, 2).toUpperCase()}
-                                </div>
-                            )}
-                            
-                            <div className="flex-1 min-w-0 text-center sm:text-left z-10">
-                                <h2 onClick={() => navigate(`/profile/${selectedPlayer.id}`)} className="text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight cursor-pointer hover:text-indigo-300 transition-colors break-words leading-tight">{selectedPlayer.name}</h2>
-                                <p className="text-indigo-400 font-bold tracking-wide mt-2 break-words text-sm md:text-base leading-snug">
-                                    {timeLabels[timeSpan]} • {statLabels[statType]}
-                                </p>
-                            </div>
-                            
-                            <div className="bg-black/30 border border-white/5 rounded-3xl p-4 md:p-5 min-w-[120px] md:min-w-[140px] text-center flex flex-col items-center justify-center relative shadow-inner z-10 shrink-0">
-                                <span className="text-slate-500 text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] mb-1">Current</span>
-                                <span className="text-3xl md:text-4xl font-black text-white tracking-tighter break-all leading-none">
-                                    {statType === 'win_rate' ? `${selectedPlayer.winRate}%` : 
-                                     statType === 'best_score' ? selectedPlayer.bestScore :
-                                     statType === 'highest_checkout' ? selectedPlayer.highestCheckout :
-                                     statType === 'avg_nine_darts' ? selectedPlayer.avgNineDarts :
-                                     selectedPlayer.filteredWins}
-                                </span>
-                            </div>
-                        </div>
+            <div className="flex flex-col gap-2.5 max-h-[580px] overflow-y-auto custom-scrollbar pr-1">
+              {leaderboard.map((player, index) => {
+                const isSelected = selectedPlayerId === player.id;
+                const isCrown = index === 0 && player.filteredWins > 0;
 
-                        {/* Interactive Stat Selectors (Desktop only) */}
-                        <div className="hidden md:flex bg-white/[0.02] border border-white/5 p-3 rounded-3xl flex-wrap gap-2 shadow-lg justify-center">
-                            {Object.entries(statLabels).map(([key, label]) => (
-                                <button
-                                    key={key}
-                                    onClick={() => setStatType(key)}
-                                    className={`py-3 px-4 md:px-5 rounded-2xl text-xs md:text-sm font-black tracking-wide transition-all border flex-1 whitespace-nowrap ${statType === key ? 'bg-indigo-500 border-indigo-400 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)] scale-[1.02]' : 'bg-transparent border-transparent text-slate-400 hover:bg-white/5 hover:text-slate-200'}`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
+                return (
+                  <div
+                    key={player.id}
+                    onClick={() => setSelectedPlayerId(player.id)}
+                    className={`relative rounded-2xl p-3.5 flex items-center justify-between border-2 transition-all cursor-pointer shadow-sm group ${
+                      isSelected 
+                        ? 'bg-[#182438] border-[#00f0a8] shadow-[0_0_15px_rgba(0,240,168,0.25)]' 
+                        : 'bg-[#131b2a] border-white/[0.06] hover:border-white/20 hover:bg-[#162032]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {/* Avatar */}
+                      <div className="relative w-11 h-11 shrink-0">
+                        <div className={`w-full h-full rounded-full overflow-hidden border ${
+                          isCrown ? 'border-amber-400' : isSelected ? 'border-[#00f0a8]' : 'border-white/10'
+                        } bg-[#1a2336] flex items-center justify-center`}>
+                          {player.pfpUrl ? (
+                            <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="font-extrabold text-white text-xs uppercase">{player.name.substring(0, 2)}</span>
+                          )}
                         </div>
+                        {isCrown && (
+                          <div className="absolute -top-2 -right-1 text-xs">👑</div>
+                        )}
+                      </div>
 
-                        {/* Graph Panel */}
-                        <div className="bg-white/[0.02] border border-white/5 p-6 md:p-8 rounded-[2rem] shadow-xl backdrop-blur-sm flex flex-col">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                                <div className="flex items-center gap-3">
-                                    {selectedWeekStart !== null && (
-                                    <button 
-                                        onClick={() => setSelectedWeekStart(null)}
-                                        className="p-2 bg-white/5 hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-300 rounded-xl transition-colors border border-white/5 hover:border-indigo-500/30 shadow-sm"
-                                        title="Back to Weekly View"
-                                    >
-                                        <ArrowLeft className="w-5 h-5" />
-                                    </button>
-                                    )}
-                                    <h3 className="font-bold text-xl md:text-2xl text-slate-100 flex items-center gap-2">
-                                        <TrendingUp className="w-6 h-6 text-indigo-400" />
-                                        {selectedWeekStart === null ? "10-Week Trend" : `Week ${getWeekNumber(new Date(selectedWeekStart))} Trend`}
-                                    </h3>
-                                </div>
-                            </div>
-                            
-                            <div className="w-full relative h-[280px] md:h-[320px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart 
-                                        data={chartData} 
-                                        margin={{ top: 10, right: 15, left: -20, bottom: 25 }}
-                                        onClick={handleChartClick}
-                                        style={selectedWeekStart === null ? { cursor: 'pointer', outline: 'none' } : { outline: 'none' }}
-                                    >
-                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 600}} dy={8} axisLine={false} tickLine={false} />
-                                        <YAxis stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600}} axisLine={false} tickLine={false} />
-                                        <Tooltip 
-                                            contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(99,102,241,0.3)', borderRadius: '16px', color: '#f8fafc', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}
-                                            itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
-                                            labelStyle={{ color: '#94a3b8', marginBottom: '4px', fontWeight: 'bold' }}
-                                            formatter={(value) => {
-                                                if (statType === 'win_rate') return [`${value}%`, statLabels[statType]];
-                                                return [value, statLabels[statType]];
-                                            }}
-                                        />
-                                        <Line 
-                                            type="monotone" 
-                                            dataKey={statType} 
-                                            stroke="#818cf8" 
-                                            strokeWidth={4} 
-                                            dot={{ r: 5, fill: "#818cf8", strokeWidth: 2, stroke: "#0f172a" }} 
-                                            activeDot={{ 
-                                                onClick: (e, payload) => {
-                                                    if (payload?.payload?.weekStart) {
-                                                        setSelectedWeekStart(payload.payload.weekStart);
-                                                    }
-                                                },
-                                                r: 8, fill: "#f472b6", stroke: "#0f172a", strokeWidth: 3, cursor: 'pointer' 
-                                            }} 
-                                            animationDuration={1500}
-                                            animationEasing="ease-out"
-                                        />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
+                      {/* Name & Primary Stat */}
+                      <div className="min-w-0">
+                        <h3 className="font-extrabold text-white text-sm tracking-tight truncate">{player.name}</h3>
+                        <div className="flex items-center gap-2 text-xs mt-0.5">
+                          {statType === 'best_score' ? (
+                            <span className="text-slate-400 font-semibold">High: <strong className="text-white">{player.bestScore}</strong></span>
+                          ) : statType === 'win_rate' ? (
+                            <span className="text-slate-400 font-semibold">Win: <strong className="text-white">{player.winRate}%</strong></span>
+                          ) : statType === 'highest_checkout' ? (
+                            <span className="text-slate-400 font-semibold">CO: <strong className="text-white">{player.highestCheckout}</strong></span>
+                          ) : statType === 'avg_nine_darts' ? (
+                            <span className="text-slate-400 font-semibold">9D: <strong className="text-white">{player.avgNineDarts}</strong></span>
+                          ) : (
+                            <span className="text-slate-400 font-semibold">Wins: <strong className="text-[#00f0a8] font-black">{player.filteredWins}</strong></span>
+                          )}
                         </div>
-                    </>
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-full border border-white/5 bg-white/[0.02] rounded-[2rem] mt-4 min-h-[400px]">
-                        <p className="text-slate-500 font-bold italic">Loading player data...</p>
+                      </div>
                     </div>
-                )}
+
+                    {/* Rank Badge */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-black text-white/20 italic group-hover:text-white/40 transition-colors">
+                        #{index + 1}
+                      </span>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); navigate(`/profile/${player.id}`); }}
+                        className="w-7 h-7 rounded-lg bg-white/5 hover:bg-[#00f0a8]/20 hover:text-[#00f0a8] flex items-center justify-center text-slate-400 transition-colors"
+                        title="View Profile"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+          </div>
+
+          {/* Right Column: Player Spotlight & Trend Chart */}
+          <div className="w-full lg:w-[58%] flex flex-col gap-4">
+            {selectedPlayer ? (
+              <>
+                {/* Spotlight Banner Card */}
+                <div className="bg-[#131b2a] border border-white/[0.08] p-5 md:p-6 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center gap-5 relative overflow-hidden">
+                  <div 
+                    onClick={() => navigate(`/profile/${selectedPlayer.id}`)}
+                    className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#00f0a8] shadow-[0_0_15px_rgba(0,240,168,0.3)] bg-[#1a2336] flex items-center justify-center cursor-pointer shrink-0"
+                  >
+                    {selectedPlayer.pfpUrl ? (
+                      <img src={selectedPlayer.pfpUrl} alt={selectedPlayer.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="font-black text-white text-2xl uppercase">{selectedPlayer.name.substring(0, 2)}</span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 text-center sm:text-left min-w-0">
+                    <h2 
+                      onClick={() => navigate(`/profile/${selectedPlayer.id}`)}
+                      className="text-2xl font-black text-white tracking-tight cursor-pointer hover:text-[#00f0a8] transition-colors truncate"
+                    >
+                      {selectedPlayer.name}
+                    </h2>
+                    <p className="text-slate-400 text-xs font-semibold mt-0.5">
+                      {timeLabels[timeSpan]} • {statLabels[statType]}
+                    </p>
+                  </div>
+
+                  <div className="bg-[#0a0e17] border border-white/10 px-5 py-3 rounded-2xl text-center shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Value</span>
+                    <span className="text-3xl font-black text-[#00f0a8]">
+                      {statType === 'win_rate' ? `${selectedPlayer.winRate}%` : 
+                       statType === 'best_score' ? selectedPlayer.bestScore :
+                       statType === 'highest_checkout' ? selectedPlayer.highestCheckout :
+                       statType === 'avg_nine_darts' ? selectedPlayer.avgNineDarts :
+                       selectedPlayer.filteredWins}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Desktop Stat Pill Selectors */}
+                <div className="hidden md:flex bg-[#131b2a] border border-white/[0.08] p-1.5 rounded-2xl gap-1 shadow-md">
+                  {Object.entries(statLabels).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setStatType(key)}
+                      className={`py-2 px-3 rounded-xl text-xs font-black tracking-wide flex-1 transition-all cursor-pointer ${
+                        statType === key 
+                          ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]' 
+                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Performance Chart Panel */}
+                <div className="bg-[#131b2a] border border-white/[0.08] p-5 md:p-6 rounded-3xl shadow-xl flex flex-col">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      {selectedWeekStart !== null && (
+                        <button 
+                          onClick={() => setSelectedWeekStart(null)}
+                          className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 transition-colors"
+                          title="Back to Weeks"
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                        </button>
+                      )}
+                      <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-[#00f0a8]" />
+                        <span>{selectedWeekStart === null ? "10-Week Trend" : `Week ${getWeekNumber(new Date(selectedWeekStart))} Trend`}</span>
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="h-64 md:h-72 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart 
+                        data={chartData} 
+                        margin={{ top: 10, right: 15, left: -25, bottom: 5 }}
+                        onClick={handleChartClick}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} dy={6} axisLine={false} tickLine={false} />
+                        <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#101726', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                          itemStyle={{ color: '#00f0a8', fontWeight: 'bold' }}
+                          formatter={(value) => {
+                            if (statType === 'win_rate') return [`${value}%`, statLabels[statType]];
+                            return [value, statLabels[statType]];
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey={statType} 
+                          stroke="#00f0a8" 
+                          strokeWidth={3} 
+                          dot={{ r: 3, fill: "#00f0a8", stroke: "#0a0e17", strokeWidth: 2 }}
+                          activeDot={{ r: 6, fill: "#2dd4bf", stroke: "#0a0e17", strokeWidth: 2 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="h-64 flex items-center justify-center bg-[#131b2a] rounded-3xl border border-white/5 text-slate-500 font-semibold text-xs">
+                No player selected.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
+

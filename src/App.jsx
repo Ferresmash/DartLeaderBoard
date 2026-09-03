@@ -12,6 +12,7 @@ import MatchDetail from './views/MatchDetail';
 import CompareStats from './views/CompareStats';
 import { useEffect, useState } from 'react';
 import { getPlayers, getMatches } from './firebase/db';
+import { DartFlowLogoMark } from './components/DartFlowLogo';
 
 export default function App() {
   const [players, setPlayers] = useState([]);
@@ -37,10 +38,17 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0e17]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
-          <p className="text-indigo-400 font-medium tracking-widest animate-pulse text-sm">LOADING</p>
+          <div className="relative flex items-center justify-center">
+            <div className="w-16 h-16 border-4 border-[#00f0a8]/20 border-t-[#00f0a8] rounded-full animate-spin shadow-[0_0_25px_rgba(0,240,168,0.4)]" />
+            <div className="absolute">
+              <DartFlowLogoMark className="w-7 h-7" />
+            </div>
+          </div>
+          <p className="text-[#00f0a8] font-black tracking-widest text-xs uppercase animate-pulse">
+            Loading DartTable
+          </p>
         </div>
       </div>
     );
@@ -48,9 +56,9 @@ export default function App() {
 
   return (
     <HashRouter>
-      <div className="min-h-[100dvh] bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 overflow-x-hidden">
+      <div className="min-h-[100dvh] bg-[#0a0e17] text-slate-100 font-sans selection:bg-[#00f0a8]/30 selection:text-white overflow-x-hidden">
         <Navigation />
-        <div className="max-w-md md:max-w-5xl mx-auto w-full min-h-[100dvh] pt-0 md:pt-28 pb-20 md:pb-0 relative transition-all duration-300">
+        <div className="max-w-md md:max-w-6xl mx-auto w-full min-h-[100dvh] pt-0 md:pt-20 pb-0 relative transition-all duration-300">
           <Routes>
             <Route path="/" element={<Home players={players} matches={matches} />} />
             <Route path="/add" element={<AddPlayer onPlayerAdded={fetchData} />} />
@@ -68,3 +76,4 @@ export default function App() {
     </HashRouter>
   );
 }
+

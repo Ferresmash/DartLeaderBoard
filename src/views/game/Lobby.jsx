@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Settings2, Circle, CheckCircle2, ChevronLeft, ChevronRight, UserPlus, X } from 'lucide-react';
+import DartFlowHeader from '../../components/DartFlowHeader';
 import clsx from 'clsx';
 
 export default function Lobby({ players }) {
@@ -50,7 +51,6 @@ export default function Lobby({ players }) {
     return 500;
   };
   
-  // Sort prioritizing Ferdinand & Ted at top, Petrus & Chanique under, others, and Emil & Max further back
   const sortedPlayers = [...players].sort((a, b) => {
     const aPriority = getPlayerPriority(a);
     const bPriority = getPlayerPriority(b);
@@ -74,122 +74,154 @@ export default function Lobby({ players }) {
   };
 
   return (
-    <div className="p-6 md:p-10 pb-32 flex flex-col gap-8 md:gap-12">
-      <div className="max-w-4xl mx-auto w-full">
-        <header className="mb-8 pt-6">
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2 md:mb-4 flex items-center gap-3">
-             <Users className="w-8 h-8 md:w-10 md:h-10 text-indigo-400" />
-             <span className="text-white">New Match</span>
+    <div className="min-h-[100dvh] bg-[#0a0e17] flex flex-col font-sans pb-28 md:pb-12">
+      <DartFlowHeader />
+
+      <div className="max-w-4xl mx-auto w-full px-5 py-6 flex flex-col gap-6">
+        <header className="text-center md:text-left">
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white flex items-center justify-center md:justify-start gap-2.5">
+            <Users className="w-8 h-8 text-[#00f0a8]" />
+            <span>New Match</span>
           </h1>
-          <p className="text-slate-400 font-medium md:text-lg">Select players to join the lobby.</p>
+          <p className="text-slate-400 text-sm mt-1 font-medium">Select players to join the match lobby</p>
         </header>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full mb-6">
+        {/* Player Selection Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 w-full">
           {visiblePlayers.map(player => {
             const isSelected = selectedIds.includes(player.id);
             return (
               <button
                 key={player.id}
                 onClick={() => togglePlayer(player.id)}
-                className={`flex flex-col items-center p-6 bg-white/[0.03] border rounded-3xl transition-all duration-300 active:scale-95 group shadow-lg ${isSelected ? 'border-indigo-500 bg-indigo-500/10 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'border-white/5 hover:bg-white/[0.08]'}`}
+                className={`flex flex-col items-center p-5 rounded-2xl transition-all duration-200 active:scale-95 group text-center cursor-pointer ${
+                  isSelected 
+                    ? 'bg-[#131f30] border-2 border-[#00f0a8] shadow-[0_0_20px_rgba(0,240,168,0.25)]' 
+                    : 'bg-[#131b2a] border border-white/[0.08] hover:border-white/20 hover:bg-[#182236]'
+                }`}
               >
-                <div className="relative w-24 h-24 md:w-28 md:h-28 mb-4">
-                   {player.pfpUrl ? (
-                     <img src={player.pfpUrl} alt={player.name} className={`w-full h-full rounded-full object-cover transition-transform duration-500 ${isSelected ? 'border-4 border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.5)] scale-[1.15]' : 'border-2 border-slate-700 group-hover:border-indigo-400 group-hover:scale-105'}`} />
-                   ) : (
-                     <div className={`w-full h-full rounded-full flex items-center justify-center font-black text-2xl uppercase transition-transform duration-500 ${isSelected ? 'border-4 border-indigo-400 bg-indigo-500/20 text-indigo-200 shadow-[0_0_15px_rgba(99,102,241,0.5)] scale-[1.15]' : 'border-2 border-slate-700 bg-slate-800 text-slate-400 group-hover:border-indigo-400 group-hover:scale-105'}`}>
-                        {player.name.substring(0,2)}
-                     </div>
-                   )}
-                   <div className="absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-0.5">
-                     {isSelected ? <CheckCircle2 className="w-8 h-8 text-indigo-400" /> : <Circle className="w-8 h-8 text-slate-700" />}
-                   </div>
+                <div className="relative w-20 h-20 md:w-24 md:h-24 mb-3">
+                  {player.pfpUrl ? (
+                    <img 
+                      src={player.pfpUrl} 
+                      alt={player.name} 
+                      className={`w-full h-full rounded-full object-cover transition-all ${
+                        isSelected 
+                          ? 'border-2 border-[#00f0a8] shadow-[0_0_12px_rgba(0,240,168,0.4)]' 
+                          : 'border border-white/10'
+                      }`} 
+                    />
+                  ) : (
+                    <div className={`w-full h-full rounded-full flex items-center justify-center font-extrabold text-xl uppercase ${
+                      isSelected 
+                        ? 'border-2 border-[#00f0a8] bg-[#00f0a8]/10 text-[#00f0a8]' 
+                        : 'border border-white/10 bg-[#1a2336] text-slate-300'
+                    }`}>
+                      {player.name.substring(0, 2)}
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 bg-[#0a0e17] rounded-full p-0.5 shadow-md">
+                    {isSelected ? (
+                      <CheckCircle2 className="w-6 h-6 text-[#00f0a8] fill-[#00f0a8]/20" />
+                    ) : (
+                      <Circle className="w-6 h-6 text-slate-600" />
+                    )}
+                  </div>
                 </div>
-                <h3 className={`font-bold md:text-xl text-center tracking-tight leading-tight ${isSelected ? 'text-indigo-100' : 'text-slate-400'}`}>{player.name}</h3>
+                <h3 className={`font-bold text-sm md:text-base tracking-tight truncate max-w-full ${
+                  isSelected ? 'text-white' : 'text-slate-300'
+                }`}>
+                  {player.name}
+                </h3>
               </button>
-            )
+            );
           })}
         </div>
 
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-2 max-w-sm mx-auto mb-8 shadow-inner">
-             <button 
-               onClick={() => setPage(p => p - 1)} 
-               disabled={page === 0}
-               className="p-3 bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-xl transition-all active:scale-95 text-slate-300"
-             >
-               <ChevronLeft className="w-6 h-6" />
-             </button>
-             <span className="font-bold text-slate-400 text-sm tracking-widest uppercase">Page {page + 1} of {totalPages}</span>
-             <button 
-               onClick={() => setPage(p => p + 1)} 
-               disabled={page === totalPages - 1}
-               className="p-3 bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-xl transition-all active:scale-95 text-slate-300"
-             >
-               <ChevronRight className="w-6 h-6" />
-             </button>
+          <div className="flex items-center justify-between bg-[#131b2a] border border-white/[0.08] rounded-2xl p-1.5 max-w-xs mx-auto shadow-inner">
+            <button 
+              onClick={() => setPage(p => p - 1)} 
+              disabled={page === 0}
+              className="p-2 bg-[#1a2336] hover:bg-[#222e44] disabled:opacity-30 rounded-xl transition-all text-slate-300"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="font-bold text-slate-400 text-xs tracking-widest uppercase">
+              Page {page + 1} of {totalPages}
+            </span>
+            <button 
+              onClick={() => setPage(p => p + 1)} 
+              disabled={page === totalPages - 1}
+              className="p-2 bg-[#1a2336] hover:bg-[#222e44] disabled:opacity-30 rounded-xl transition-all text-slate-300"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
           </div>
         )}
 
-        <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 md:p-8 mb-8 shadow-inner">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-             <div className="flex items-center gap-3">
-               <div className="p-2 bg-indigo-500/20 rounded-xl">
-                 <UserPlus className="w-6 h-6 text-indigo-400" />
-               </div>
-               <div>
-                  <h3 className="font-bold text-xl text-slate-100">Add Guest</h3>
-                  <p className="text-slate-400 text-sm">Play with someone not on the leaderboard</p>
-               </div>
-             </div>
-             
-             <form onSubmit={handleAddGuest} className="flex gap-2 w-full md:w-auto">
-               <input 
-                 type="text" 
-                 value={guestName} 
-                 onChange={(e) => setGuestName(e.target.value)}
-                 placeholder="Guest name" 
-                 className="flex-1 md:w-48 bg-slate-900 border border-slate-700/50 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-               />
-               <button 
-                 type="submit"
-                 disabled={!guestName.trim()}
-                 className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 whitespace-nowrap"
-               >
-                 Add
-               </button>
-             </form>
+        {/* Guest Add Form */}
+        <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-5 shadow-lg">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-[#00f0a8]/10 rounded-xl">
+                <UserPlus className="w-5 h-5 text-[#00f0a8]" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">Add Guest Player</h3>
+                <p className="text-slate-400 text-xs">Play with someone without a permanent profile</p>
+              </div>
+            </div>
+            
+            <form onSubmit={handleAddGuest} className="flex gap-2 w-full md:w-auto">
+              <input 
+                type="text" 
+                value={guestName} 
+                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="Guest name" 
+                className="flex-1 md:w-48 bg-[#0a0e17] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-[#00f0a8] transition-colors"
+              />
+              <button 
+                type="submit"
+                disabled={!guestName.trim()}
+                className="bg-[#00f0a8] hover:bg-[#00d694] disabled:opacity-40 disabled:bg-[#1a2336] disabled:text-slate-500 text-[#0a0e17] font-extrabold px-4 py-2.5 rounded-xl transition-all shadow-md active:scale-95 text-xs uppercase tracking-wider whitespace-nowrap cursor-pointer"
+              >
+                Add
+              </button>
+            </form>
           </div>
 
           {customGuests.length > 0 && (
-             <div className="flex flex-wrap gap-3 animate-in fade-in slide-in-from-top-4">
-               {customGuests.map(g => (
-                 <div key={g.id} className="flex items-center gap-2 bg-slate-900 border border-slate-700/50 rounded-full pl-4 pr-2 py-1.5 shadow-sm">
-                   <span className="text-slate-200 font-bold tracking-tight">{g.name}</span>
-                   <button 
-                     onClick={() => removeGuest(g.id)}
-                     className="w-6 h-6 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors"
-                   >
-                     <X className="w-4 h-4" />
-                   </button>
-                 </div>
-               ))}
-             </div>
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+              {customGuests.map(g => (
+                <div key={g.id} className="flex items-center gap-2 bg-[#0a0e17] border border-white/10 rounded-full pl-3 pr-1.5 py-1 text-xs">
+                  <span className="text-slate-200 font-bold">{g.name}</span>
+                  <button 
+                    onClick={() => removeGuest(g.id)}
+                    className="w-5 h-5 rounded-full bg-rose-500/15 text-rose-400 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
-      </div>
-      
-      <div className="max-w-4xl mx-auto w-full">
-        <button
-          onClick={handleNext}
-          disabled={selectedIds.length === 0 && customGuests.length === 0}
-          className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black uppercase tracking-wider py-5 rounded-3xl shadow-lg shadow-indigo-500/25 transition-all active:scale-[0.98] text-xl"
-        >
-          <span>Continue to Setup</span>
-          <Settings2 className="w-6 h-6" />
-        </button>
+        {/* Continue Button */}
+        <div>
+          <button
+            onClick={handleNext}
+            disabled={selectedIds.length === 0 && customGuests.length === 0}
+            className="w-full flex items-center justify-center gap-2 bg-[#00f0a8] hover:bg-[#00d694] disabled:opacity-40 disabled:cursor-not-allowed text-[#0a0e17] font-black uppercase tracking-wider py-4 rounded-2xl shadow-[0_0_25px_rgba(0,240,168,0.35)] transition-all active:scale-[0.98] text-base cursor-pointer"
+          >
+            <span>Continue to Setup</span>
+            <Settings2 className="w-5 h-5" />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
+

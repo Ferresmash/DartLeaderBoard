@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { User, ChevronRight, TrendingUp } from 'lucide-react';
+import DartFlowHeader from '../components/DartFlowHeader';
 
 export default function PlayerProfiles({ players }) {
   const navigate = useNavigate();
@@ -36,51 +37,69 @@ export default function PlayerProfiles({ players }) {
   });
 
   return (
-    <div className="p-6 md:p-10 pb-28 min-h-[100dvh] bg-slate-950 font-sans">
-      <div className="max-w-4xl mx-auto md:pt-4">
-        <header className="mb-8">
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2 md:mb-4 flex flex-wrap items-center gap-3">
-             <div className="flex items-center gap-3">
-               <User className="w-8 h-8 md:w-10 md:h-10 text-indigo-400" />
-               <span className="text-white">Statistics</span>
-             </div>
-             <button 
-              onClick={() => navigate('/compare')}
-              className="group flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl text-sm font-bold hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-all shadow-lg active:scale-95 ml-auto md:ml-4"
-             >
-               <TrendingUp className="w-4 h-4" />
-               <span>Go to graph...</span>
-               <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-             </button>
-          </h1>
-          <p className="text-slate-400 font-medium md:text-lg">Detailed performance profiles for all competitors.</p>
+    <div className="min-h-[100dvh] bg-[#0a0e17] font-sans pb-28 md:pb-12 flex flex-col">
+      <DartFlowHeader />
+
+      <div className="max-w-4xl mx-auto w-full px-5 py-6 flex flex-col gap-6">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white flex items-center gap-2.5">
+              <User className="w-8 h-8 text-[#00f0a8]" />
+              <span>Player Statistics</span>
+            </h1>
+            <p className="text-slate-400 text-sm mt-1 font-medium">Detailed profiles and career analytics</p>
+          </div>
+
+          <button 
+            onClick={() => navigate('/compare')}
+            className="self-start sm:self-auto flex items-center gap-2 px-4 py-2 bg-[#131b2a] border border-[#00f0a8]/30 hover:border-[#00f0a8] text-[#00f0a8] rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span>Compare Graph</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-          {sortedPlayers.map(player => (
-            <button
-              key={player.id}
-              onClick={() => navigate(`/profile/${player.id}`)}
-              className="flex items-center p-4 md:p-6 bg-white/[0.03] border border-white/5 rounded-3xl transition-all duration-300 active:scale-[0.98] hover:bg-white/[0.08] group shadow-lg text-left"
-            >
-              <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden mr-4 shadow-inner border border-white/10 shrink-0">
-                {player.pfpUrl ? (
-                  <img src={player.pfpUrl || undefined} alt={player.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-slate-800 flex items-center justify-center font-black text-slate-300 uppercase text-2xl md:text-3xl tracking-widest">{player.name.substring(0,2)}</div>
-                )}
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-xl md:text-2xl text-slate-100 mb-1">{player.name}</h3>
-                <p className="text-sm md:text-base font-medium text-slate-400">Best: <span className="text-white">{player.bestScore}</span> • Wins: <span className="text-white">{player.totalWins}</span> • Winrate: <span className="text-white">{player.gamesPlayed ? Math.round((player.totalWins / player.gamesPlayed)*100) : 0}%</span></p>
-              </div>
-              <div className="w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center bg-white/5 group-hover:bg-indigo-500/20 transition-colors shrink-0 ml-2">
-                <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-slate-400 group-hover:text-indigo-400 transition-colors" />
-              </div>
-            </button>
-          ))}
+        {/* Player Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 w-full">
+          {sortedPlayers.map((player, index) => {
+            const winRate = player.gamesPlayed ? Math.round((player.totalWins / player.gamesPlayed) * 100) : 0;
+
+            return (
+              <button
+                key={player.id}
+                onClick={() => navigate(`/profile/${player.id}`)}
+                className="flex items-center p-4 bg-[#131b2a] border border-white/[0.08] hover:border-white/20 hover:bg-[#172133] rounded-2xl transition-all duration-200 active:scale-[0.98] group shadow-sm text-left cursor-pointer"
+              >
+                <div className="w-14 h-14 rounded-full overflow-hidden mr-3.5 border-2 border-white/10 group-hover:border-[#00f0a8] transition-colors shrink-0 bg-[#1a2336] flex items-center justify-center">
+                  {player.pfpUrl ? (
+                    <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="font-black text-white text-lg uppercase">{player.name.substring(0, 2)}</span>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-base text-white truncate group-hover:text-[#00f0a8] transition-colors">{player.name}</h3>
+                    <span className="text-[10px] font-black text-slate-500 uppercase bg-[#0a0e17] px-2 py-0.5 rounded-md border border-white/5">
+                      #{index + 1}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 font-medium">
+                    Best: <strong className="text-white">{player.bestScore || 0}</strong> • Wins: <strong className="text-[#00f0a8]">{player.totalWins || 0}</strong> • Win: <strong className="text-white">{winRate}%</strong>
+                  </p>
+                </div>
+
+                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 group-hover:bg-[#00f0a8]/15 group-hover:text-[#00f0a8] text-slate-400 transition-colors shrink-0 ml-2">
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
   );
 }
+

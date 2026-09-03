@@ -1,11 +1,98 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { submitMatchData } from '../../firebase/db';
-import { Trophy, ChevronLeft, Delete, Check, Target, Skull, Settings, X, Zap } from 'lucide-react';
+import { Trophy, ChevronLeft, Delete, Check, Target, Skull, Settings, X, Zap, RotateCcw, AlertTriangle } from 'lucide-react';
 import { getCheckout } from '../../utils/checkouts';
+import DartFlowHeader from '../../components/DartFlowHeader';
 import clsx from 'clsx';
 
-const BG_COLORS = ['bg-red-500', 'bg-amber-500', 'bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
+// Signature DartFlow Player Color Themes (from reference image)
+const PLAYER_THEMES = [
+  {
+    id: 'teal',
+    border: 'border-[#00f0a8]',
+    borderInactive: 'border-[#00f0a8]/35',
+    activeGlow: 'shadow-[0_0_20px_rgba(0,240,168,0.35)]',
+    badgeBg: 'bg-[#00f0a8]',
+    badgeText: 'text-[#0a0e17]',
+    scoreText: 'text-[#00f0a8]',
+    avgText: 'text-[#00f0a8]/80',
+    ring: 'ring-[#00f0a8]',
+    accentHex: '#00f0a8',
+    cardBgActive: 'bg-[#102422]',
+    cardBgInactive: 'bg-[#121824]'
+  },
+  {
+    id: 'purple',
+    border: 'border-[#a855f7]',
+    borderInactive: 'border-[#a855f7]/35',
+    activeGlow: 'shadow-[0_0_20px_rgba(168,85,247,0.35)]',
+    badgeBg: 'bg-[#a855f7]',
+    badgeText: 'text-white',
+    scoreText: 'text-[#c084fc]',
+    avgText: 'text-[#c084fc]/80',
+    ring: 'ring-[#a855f7]',
+    accentHex: '#a855f7',
+    cardBgActive: 'bg-[#20152c]',
+    cardBgInactive: 'bg-[#121824]'
+  },
+  {
+    id: 'orange',
+    border: 'border-[#f97316]',
+    borderInactive: 'border-[#f97316]/35',
+    activeGlow: 'shadow-[0_0_20px_rgba(249,115,22,0.35)]',
+    badgeBg: 'bg-[#f97316]',
+    badgeText: 'text-white',
+    scoreText: 'text-[#fb923c]',
+    avgText: 'text-[#fb923c]/80',
+    ring: 'ring-[#f97316]',
+    accentHex: '#f97316',
+    cardBgActive: 'bg-[#281812]',
+    cardBgInactive: 'bg-[#121824]'
+  },
+  {
+    id: 'yellow',
+    border: 'border-[#eab308]',
+    borderInactive: 'border-[#eab308]/35',
+    activeGlow: 'shadow-[0_0_20px_rgba(234,179,8,0.35)]',
+    badgeBg: 'bg-[#eab308]',
+    badgeText: 'text-[#0a0e17]',
+    scoreText: 'text-[#facc15]',
+    avgText: 'text-[#facc15]/80',
+    ring: 'ring-[#eab308]',
+    accentHex: '#eab308',
+    cardBgActive: 'bg-[#282210]',
+    cardBgInactive: 'bg-[#121824]'
+  },
+  {
+    id: 'cyan',
+    border: 'border-[#06b6d4]',
+    borderInactive: 'border-[#06b6d4]/35',
+    activeGlow: 'shadow-[0_0_20px_rgba(6,182,212,0.35)]',
+    badgeBg: 'bg-[#06b6d4]',
+    badgeText: 'text-white',
+    scoreText: 'text-[#22d3ee]',
+    avgText: 'text-[#22d3ee]/80',
+    ring: 'ring-[#06b6d4]',
+    accentHex: '#06b6d4',
+    cardBgActive: 'bg-[#0e222b]',
+    cardBgInactive: 'bg-[#121824]'
+  },
+  {
+    id: 'rose',
+    border: 'border-[#f43f5e]',
+    borderInactive: 'border-[#f43f5e]/35',
+    activeGlow: 'shadow-[0_0_20px_rgba(244,63,94,0.35)]',
+    badgeBg: 'bg-[#f43f5e]',
+    badgeText: 'text-white',
+    scoreText: 'text-[#fb7185]',
+    avgText: 'text-[#fb7185]/80',
+    ring: 'ring-[#f43f5e]',
+    accentHex: '#f43f5e',
+    cardBgActive: 'bg-[#291119]',
+    cardBgInactive: 'bg-[#121824]'
+  }
+];
 
 const getNextActiveIdx = (currentIdx, isSD, sdPlayers, totalLen) => {
   let next = (currentIdx + 1) % totalLen;
@@ -23,13 +110,14 @@ export default function Play({ onMatchComplete }) {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Persistence Loading Logic
   const savedGameStr = localStorage.getItem('activeDartsGame');
   const savedGame = savedGameStr ? JSON.parse(savedGameStr) : null;
   const isNewGame = !!location.state?.selectedPlayers;
 
   const startingScore = isNewGame ? location.state?.startingScore : savedGame?.startingScore ?? 501;
   const legsToWin = isNewGame ? location.state?.legsToWin : savedGame?.legsToWin ?? 1;
+  const playerMode = isNewGame ? location.state?.playerMode || 'ffa' : savedGame?.playerMode || 'ffa';
+  const outRule = isNewGame ? location.state?.outRule || 'straight' : savedGame?.outRule || 'straight';
 
   const [players, setPlayers] = useState(() => {
     if (isNewGame) {
@@ -38,7 +126,8 @@ export default function Play({ onMatchComplete }) {
         currentScore: startingScore,
         legsWon: 0,
         dartsThrown: 0,
-        bgColor: BG_COLORS[i % BG_COLORS.length]
+        team: playerMode === 'teams' ? (i % 2 === 0 ? 'Team A' : 'Team B') : null,
+        themeIdx: playerMode === 'teams' ? (i % 2 === 0 ? 0 : 1) : i % PLAYER_THEMES.length
       }));
     }
     return savedGame?.players || [];
@@ -54,48 +143,44 @@ export default function Play({ onMatchComplete }) {
   const [checkoutConfirmScore, setCheckoutConfirmScore] = useState(null);
 
   // Sudden Death State
-  const [isSuddenDeath, setIsSuddenDeath] = useState(isNewGame ? false : savedGame?.isSuddenDeath ?? false);
+  const [isSuddenDeath, setIsSuddenDeath] = useState(isNewGame ? false : savedGame?.isSuddenDeath || false);
   const [suddenDeathPlayers, setSuddenDeathPlayers] = useState(isNewGame ? [] : savedGame?.suddenDeathPlayers || []);
   const [suddenDeathScores, setSuddenDeathScores] = useState(isNewGame ? {} : savedGame?.suddenDeathScores || {});
 
   // Persistence Saving Hook
   useEffect(() => {
-    if (players && players.length > 0) {
+    if (players.length > 0 && !isSaving) {
       localStorage.setItem('activeDartsGame', JSON.stringify({
-        players, activeIdx, history, matchTurns, bestScores, 
-        isSuddenDeath, suddenDeathPlayers, suddenDeathScores,
-        startingScore, legsToWin
+        players,
+        activeIdx,
+        history,
+        matchTurns,
+        bestScores,
+        startingScore,
+        legsToWin,
+        playerMode,
+        outRule,
+        isSuddenDeath,
+        suddenDeathPlayers,
+        suddenDeathScores
       }));
     }
-  }, [players, activeIdx, history, matchTurns, bestScores, isSuddenDeath, suddenDeathPlayers, suddenDeathScores, startingScore, legsToWin]);
+  }, [players, activeIdx, history, matchTurns, bestScores, startingScore, legsToWin, playerMode, outRule, isSuddenDeath, suddenDeathPlayers, suddenDeathScores, isSaving]);
 
-  // Track isSaving in a ref so popstate event listener can read the current value without being recreated
   const isSavingRef = useRef(isSaving);
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
 
-  // Handle hardware/system back button to prevent accidental match abandonment
   useEffect(() => {
-    // Push a dummy state to history to create an entry the user can "go back" from
     window.history.pushState(null, null, window.location.href);
-
     const handlePopState = () => {
-      // If we are currently saving, let the back action proceed normally
       if (isSavingRef.current) return;
-
-      // Show the same exit confirmation dialog as abandon match
       setShowExitModal(true);
-
-      // Re-push a dummy state to keep the back-navigation blocker active
       window.history.pushState(null, null, window.location.href);
     };
-
     window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   if (!isNewGame && !savedGame) {
@@ -103,7 +188,6 @@ export default function Play({ onMatchComplete }) {
   }
 
   const activePlayer = players[activeIdx] || players[0];
-  const isGrid = players.length > 3;
 
   const handleKeypad = (val) => {
     if (val === '+') {
@@ -149,8 +233,8 @@ export default function Play({ onMatchComplete }) {
     let isBust = isExplicitBust;
 
     if (isSuddenDeath) {
-      isBust = false; // No busting in shootout
-      newScore = currScore; // Main score stays at 0
+      isBust = false;
+      newScore = currScore;
     } else {
       if (!isBust && (newScore < 0 || newScore === 1)) {
         isBust = true;
@@ -230,7 +314,7 @@ export default function Play({ onMatchComplete }) {
       return;
     }
 
-    // MULTI-LEG LOGIC (Immediate Win)
+    // MULTI-LEG LOGIC
     if (newScore === 0 && legsToWin > 1) {
       newPlayers[activeIdx].legsWon += 1;
       if (newPlayers[activeIdx].legsWon >= legsToWin) {
@@ -257,7 +341,6 @@ export default function Play({ onMatchComplete }) {
          handleMatchWin(winnerObj, newPlayers);
          return;
       } else if (zeroPlayersCount > 1) {
-         // Sudden Death Triggers!
          setIsSuddenDeath(true);
          const sdPlayers = newPlayers.map((p, i) => p.currentScore === 0 ? i : -1).filter(i => i !== -1);
          setSuddenDeathPlayers(sdPlayers);
@@ -311,7 +394,7 @@ export default function Play({ onMatchComplete }) {
 
   const handleMatchWin = async (winner, latestPlayers = players) => {
     setIsSaving(true);
-    localStorage.removeItem('activeDartsGame'); // Clear on match complete
+    localStorage.removeItem('activeDartsGame');
     const participantIds = latestPlayers.map(p => p.id);
     try {
       await submitMatchData(winner.id, participantIds, bestScores, matchTurns, startingScore);
@@ -324,179 +407,327 @@ export default function Play({ onMatchComplete }) {
 
   if (isSaving) {
     return (
-      <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center">
-        <Trophy className="w-24 h-24 text-amber-400 mb-6 animate-bounce drop-shadow-[0_0_30px_rgba(251,191,36,0.4)]" />
-        <h2 className="text-4xl font-black text-white mb-2">Match Complete!</h2>
-        <p className="text-emerald-400 tracking-widest uppercase font-bold animate-pulse">Syncing Leaderboard</p>
+      <div className="fixed inset-0 z-[100] bg-[#0a0e17] flex flex-col items-center justify-center p-6">
+        <div className="w-24 h-24 rounded-full bg-[#00f0a8]/15 border-2 border-[#00f0a8] flex items-center justify-center mb-6 shadow-[0_0_35px_rgba(0,240,168,0.5)]">
+          <Trophy className="w-12 h-12 text-[#00f0a8] animate-bounce" />
+        </div>
+        <h2 className="text-3xl font-black text-white mb-2 tracking-tight">Match Complete!</h2>
+        <p className="text-[#00f0a8] tracking-widest uppercase font-bold text-xs animate-pulse">Syncing Leaderboard...</p>
       </div>
     );
   }
 
+  // Calculate parsed current total for live math input
+  const currentCalculatedTotal = inputVal ? inputVal.split('+').reduce((acc, curr) => acc + (parseInt(curr) || 0), 0) : 0;
+
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950 font-sans overflow-hidden">
-      {/* Players Top View - exactly 50% height */}
-      <div className={clsx(
-        "w-full h-1/2 relative z-10",
-        isGrid ? "grid grid-cols-2 grid-rows-2" : "flex"
-      )}>
-        {players.map((p, i) => {
-          const isFading = isSuddenDeath && !suddenDeathPlayers.includes(i);
-          return (
-            <div key={p.id} className={clsx(
-              "flex flex-col shadow-inner transition-all duration-300 relative overflow-hidden",
-              isGrid ? "" : "flex-1",
-              p.bgColor,
-              activeIdx === i ? "shadow-[inset_0_0_40px_rgba(0,0,0,0.5)] z-20 scale-[1.02] opacity-100" : "scale-[0.98]",
-              isFading && "opacity-20 grayscale"
-            )}>
-              {/* Dark Overlay for inactive players */}
-              {activeIdx !== i && <div className="absolute inset-0 bg-black/60 z-0 pointer-events-none transition-colors duration-500" />}
-              
-              <div className={clsx("flex items-center gap-2 bg-black/20 relative z-10", isGrid ? "p-1.5" : "p-3")}>
-                {!isGrid && (
-                   p.pfpUrl ? <img src={p.pfpUrl} className="w-8 h-8 rounded-full border-2 border-white/50 object-cover shrink-0" alt={p.name} /> : <div className="w-8 h-8 rounded-full border-2 border-white/50 bg-slate-800 flex items-center justify-center font-bold text-slate-300 uppercase shrink-0 text-xs shadow-inner">{p.name.substring(0,2)}</div>
+    <div className="fixed inset-0 z-[100] flex flex-col bg-[#0a0e17] font-sans overflow-hidden select-none">
+      {/* Top Header Bar */}
+      <DartFlowHeader 
+        showBack 
+        onBack={() => setShowExitModal(true)}
+        rightAction={
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleUndo}
+              disabled={history.length === 0}
+              className="w-9 h-9 rounded-full bg-[#161f30] border border-white/10 hover:bg-[#1f2b42] disabled:opacity-30 flex items-center justify-center text-slate-300 hover:text-white transition-all active:scale-95"
+              title="Undo Last Throw"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setShowExitModal(true)}
+              className="w-9 h-9 rounded-full bg-[#161f30] border border-white/10 hover:bg-[#1f2b42] flex items-center justify-center text-slate-300 hover:text-white transition-all active:scale-95"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
+        }
+      />
+
+      {/* Main Scoring Area - 4-Slot Scoreboard Grid */}
+      <div className="flex-1 w-full max-w-lg mx-auto px-4 py-2 flex flex-col justify-between overflow-hidden">
+        {/* Scoreboard Cards Grid */}
+        <div className={clsx(
+          "grid gap-2.5 w-full flex-1 max-h-[46vh]",
+          players.length <= 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2"
+        )}>
+          {players.map((p, i) => {
+            const theme = PLAYER_THEMES[i % PLAYER_THEMES.length];
+            const isActive = activeIdx === i;
+            const isFading = isSuddenDeath && !suddenDeathPlayers.includes(i);
+
+            // Compute running avg for player
+            const pTurns = (matchTurns || []).filter(t => t && t.playerId === p.id && !t.isBust);
+            const pSum = pTurns.reduce((acc, t) => acc + t.score, 0);
+            const pAvg = pTurns.length > 0 ? (pSum / pTurns.length).toFixed(1) : '0.0';
+
+            const checkoutGuide = getCheckout(p.currentScore);
+
+            return (
+              <div 
+                key={p.id || i}
+                onClick={() => setActiveIdx(i)}
+                className={clsx(
+                  "relative rounded-2xl p-3 md:p-4 flex flex-col justify-between border-2 transition-all duration-300 cursor-pointer overflow-hidden",
+                  isActive ? `${theme.border} ${theme.cardBgActive} ${theme.activeGlow} scale-[1.02] z-10` : `${theme.borderInactive} ${theme.cardBgInactive} opacity-75 hover:opacity-100`,
+                  isFading && "opacity-20 grayscale"
                 )}
-                <span className={clsx("font-bold text-white tracking-tight truncate", isGrid ? "text-xs ml-1" : "text-sm md:text-lg")}>{p.name.split(' ')[0]}</span>
-                <div className="ml-auto flex gap-1 bg-black/30 px-2 py-1 rounded-full">
-                  {[...Array(legsToWin)].map((_, legIdx) => (
-                    <div key={legIdx} className={clsx("w-2 h-2 md:w-3 md:h-3 rounded-full border border-white/70", legIdx < p.legsWon ? "bg-white" : "bg-transparent")} />
-                  ))}
+              >
+                {/* Active Indicator Top Highlight Glow */}
+                {isActive && (
+                  <div 
+                    className="absolute top-0 left-0 right-0 h-1"
+                    style={{ backgroundColor: theme.accentHex }}
+                  />
+                )}
+
+                {/* Card Header: Number Badge + Player Name + Team Pill + Legs */}
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={clsx(
+                      "w-5 h-5 rounded-md font-black text-[11px] flex items-center justify-center shrink-0",
+                      theme.badgeBg,
+                      theme.badgeText
+                    )}>
+                      {i + 1}
+                    </span>
+                    <span className="font-extrabold text-white text-xs md:text-sm tracking-tight truncate">
+                      {p.name.split(' ')[0]}
+                    </span>
+                    {p.team && (
+                      <span className={clsx(
+                        "text-[9px] font-black uppercase px-1.5 py-0.2 rounded border border-white/10 shrink-0",
+                        theme.badgeBg,
+                        theme.badgeText
+                      )}>
+                        {p.team}
+                      </span>
+                    )}
+                  </div>
+
+                  {legsToWin > 1 && (
+                    <div className="flex gap-1 bg-[#0a0e17]/60 px-1.5 py-0.5 rounded-md border border-white/5">
+                      {[...Array(legsToWin)].map((_, legIdx) => (
+                        <div 
+                          key={legIdx} 
+                          className={clsx(
+                            "w-1.5 h-1.5 rounded-full",
+                            legIdx < p.legsWon ? theme.badgeBg : "bg-white/20"
+                          )} 
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Center: Large Remaining Score */}
+                <div className="flex flex-col items-center justify-center my-auto py-1">
+                  {isSuddenDeath && suddenDeathPlayers.includes(i) ? (
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 animate-pulse">Sudden Death</span>
+                      <span className="text-4xl md:text-5xl font-black text-rose-400 tracking-tighter">
+                        {suddenDeathScores[i] !== undefined ? suddenDeathScores[i] : '-'}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <span className={clsx(
+                        "text-4xl md:text-5xl lg:text-6xl font-black tracking-tight leading-none",
+                        isActive ? "text-white" : "text-slate-300"
+                      )}>
+                        {p.currentScore}
+                      </span>
+                      {checkoutGuide && (
+                        <span className="text-[9px] md:text-[10px] font-bold text-[#00f0a8] uppercase tracking-wider mt-1 truncate max-w-full">
+                          {checkoutGuide}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Card Footer: Avg Stats */}
+                <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[11px] font-semibold">
+                  <span className="text-slate-400">avg.</span>
+                  <span className={clsx("font-extrabold", theme.avgText)}>{pAvg}</span>
                 </div>
               </div>
-              
-              <div className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-transparent to-black/10 z-10 w-full px-2">
-                {isSuddenDeath && suddenDeathPlayers.includes(i) ? (
-                  <>
-                    <span className="text-amber-400 font-extrabold text-[10px] md:text-xs tracking-widest uppercase mb-1 md:mb-2 animate-pulse drop-shadow-md">Sudden Death</span>
-                    <span className={clsx("font-black text-rose-300 drop-shadow-lg tracking-tighter leading-none", isGrid ? "text-5xl" : "text-6xl md:text-8xl")}>{suddenDeathScores[i] !== undefined ? suddenDeathScores[i] : '-'}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className={clsx("font-black text-white drop-shadow-lg tracking-tighter leading-none mt-4", isGrid ? "text-5xl" : "text-6xl md:text-9xl")}>{p.currentScore}</span>
-                    <span className="h-6 mt-1 text-slate-500 font-bold uppercase tracking-widest text-[9px] md:text-xs drop-shadow-sm text-center truncate w-full">
-                      {getCheckout(p.currentScore) || ''}
-                    </span>
-                  </>
-                )}
-              </div>
-              
-              <div className={clsx("bg-black/30 flex justify-center text-white/90 font-bold tracking-wider uppercase relative z-10", isGrid ? "p-1.5 text-[10px]" : "p-3 text-xs md:text-sm")}>
-                {(() => {
-                  const pTurns = (matchTurns || []).filter(t => t && t.playerId === p.id && !t.isBust);
-                  const pSum = pTurns.reduce((acc, t) => acc + t.score, 0);
-                  const pAvg = pTurns.length > 0 ? (pSum / pTurns.length).toFixed(1) : '0.0';
-                  return <span>Avg: {pAvg}</span>;
-                })()}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Controls View - Exactly 50% height */}
-      <div className="w-full h-1/2 flex flex-col p-4 md:p-6 z-20 bg-slate-900 shadow-[0_-15px_40px_rgba(0,0,0,0.5)] border-t border-white/5 relative">
-        <div className="flex justify-between items-center mb-4 md:mb-6">
-          <button onClick={handleUndo} disabled={history.length === 0} className="text-slate-400 disabled:opacity-30 hover:text-white flex items-center gap-1 font-bold transition-colors">
-            <ChevronLeft className="w-5 h-5 md:w-6 md:h-6" /> Undo
-          </button>
-          <span className="text-amber-400 font-black uppercase tracking-widest text-base md:text-xl drop-shadow-md flex items-center gap-2">
-            {isSuddenDeath && <Zap className="w-5 h-5 text-amber-400 animate-pulse" />}
-            {isSuddenDeath ? `SHOOTOUT: ${activePlayer.name.split(' ')[0]}` : `${activePlayer.name.split(' ')[0]}'s Turn`}
-          </span>
-          <button onClick={() => setShowExitModal(true)} className="text-slate-400 hover:text-white transition-colors h-8 w-8 flex items-center justify-center">
-            <Settings className="w-6 h-6" />
-          </button>
+            );
+          })}
         </div>
 
-        <div className="flex items-center bg-slate-950 p-2 md:p-3 rounded-[24px] mb-4 shadow-inner border border-white/5 max-w-xl mx-auto w-full relative h-20 md:h-24 shrink-0">
-          <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-indigo-500/20 to-transparent pointer-events-none"></div>
-          <div className="w-12 flex justify-center z-10">
-            <Target className="w-5 h-5 md:w-6 md:h-6 text-slate-500" />
-          </div>
-          <div className="flex-1 flex flex-col justify-center items-center z-10 w-full overflow-hidden px-4">
-            <span className="text-4xl md:text-6xl font-black text-white tracking-widest leading-none mt-1 truncate max-w-full text-center">{inputVal || '-'}</span>
+        {/* Math Score Input Bar (matches "Input: 60+57+20" style in image) */}
+        <div className="my-2 bg-[#121927] border border-white/10 rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-inner">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Input:</span>
+            <span className="text-base md:text-lg font-mono font-extrabold text-[#00f0a8] tracking-wider truncate">
+              {inputVal ? inputVal : <span className="text-slate-600">0</span>}
+            </span>
             {inputVal.includes('+') && (
-              <span className="text-emerald-400 font-black text-sm uppercase tracking-widest leading-none mt-1 shadow-md">Total: {inputVal.split('+').reduce((acc, curr) => acc + (parseInt(curr) || 0), 0)}</span>
+              <span className="text-xs font-bold text-slate-400">
+                = <strong className="text-white font-extrabold">{currentCalculatedTotal}</strong>
+              </span>
             )}
           </div>
-          <div className="flex gap-2 z-10 h-full">
-            <button onClick={handleBackspace} disabled={!inputVal} className="h-full w-14 md:w-20 rounded-[16px] bg-white/5 hover:bg-white/10 disabled:opacity-30 text-rose-400 flex items-center justify-center active:scale-95 transition-all">
-              <Delete className="w-6 h-6 md:w-8 md:h-8" />
+          {inputVal && (
+            <button 
+              onClick={handleBackspace} 
+              className="p-1 text-slate-400 hover:text-rose-400 active:scale-90 transition-all"
+            >
+              <Delete className="w-5 h-5" />
             </button>
-            <button onClick={submitScore} disabled={!inputVal} className="h-full w-14 md:w-20 rounded-[16px] bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center disabled:opacity-30 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">
-              <Check className="w-8 h-8 md:w-10 md:h-10" />
-            </button>
-          </div>
+          )}
         </div>
 
-        <div className="flex-1 grid grid-cols-3 gap-2 md:gap-3 max-w-xl mx-auto w-full min-h-0">
-          {[1,2,3,4,5,6,7,8,9].map(num => (
-            <button 
-              key={num} 
-              onClick={() => handleKeypad(num.toString())}
-              className="bg-white/5 hover:bg-white/10 text-white font-black text-3xl md:text-4xl rounded-2xl active:scale-95 active:bg-white/20 transition-all shadow-md border border-white/5 flex items-center justify-center"
-            >
-              {num}
-            </button>
-          ))}
-          <div className="col-span-3 grid grid-cols-3 gap-2 md:gap-3">
-             <button 
-              onClick={handleExplicitBust}
-              disabled={isSuddenDeath}
-              className="bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 disabled:scale-100 disabled:cursor-not-allowed text-rose-400 font-extrabold text-xl md:text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-rose-500/20 flex flex-col items-center justify-center tracking-wider"
-            >
-              Bust
-            </button>
-             <button 
-              onClick={() => handleKeypad('0')}
-              className="bg-white/5 hover:bg-white/10 text-white font-black text-3xl md:text-4xl rounded-2xl active:scale-95 active:bg-white/20 transition-all shadow-md border border-white/5 flex items-center justify-center"
-            >
-              0
-            </button>
-             <button 
-              onClick={() => handleKeypad('+')}
-              className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 font-black text-3xl md:text-4xl rounded-2xl active:scale-95 transition-all shadow-md border border-indigo-500/30 flex items-center justify-center"
-            >
-              +
-            </button>
-          </div>
+        {/* Clean Calculator Keypad Controls (4x4 layout from Screen 2) */}
+        <div className="grid grid-cols-4 gap-2 mb-2">
+          {/* Row 1 */}
+          <button 
+            onClick={() => handleKeypad('1')} 
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            1
+          </button>
+          <button 
+            onClick={() => handleKeypad('2')} 
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            2
+          </button>
+          <button 
+            onClick={() => handleKeypad('3')} 
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            3
+          </button>
+          <button 
+            onClick={() => handleKeypad('+')} 
+            className="h-12 md:h-14 bg-[#1b2a3c] hover:bg-[#23374e] text-[#00f0a8] font-black text-2xl rounded-2xl border border-[#00f0a8]/30 active:scale-95 transition-all shadow-sm"
+          >
+            +
+          </button>
+
+          {/* Row 2 */}
+          <button 
+            onClick={() => handleKeypad('4')} 
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            4
+          </button>
+          <button 
+            onClick={() => handleKeypad('5')} 
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            5
+          </button>
+          <button 
+            onClick={() => handleKeypad('6')} 
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            6
+          </button>
+          <button 
+            onClick={handleExplicitBust}
+            disabled={isSuddenDeath}
+            className="h-12 md:h-14 bg-[#23151c] hover:bg-[#2e1924] disabled:opacity-30 text-rose-400 font-extrabold text-xs uppercase tracking-wider rounded-2xl border border-rose-500/20 active:scale-95 transition-all shadow-sm flex items-center justify-center"
+          >
+            Bust
+          </button>
+
+          {/* Row 3 */}
+          <button 
+            onClick={() => handleKeypad('7')} 
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            7
+          </button>
+          <button 
+            onClick={() => handleKeypad('8')} 
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            8
+          </button>
+          <button 
+            onClick={() => handleKeypad('9')} 
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            9
+          </button>
+          <button 
+            onClick={handleBackspace} 
+            disabled={!inputVal}
+            className="h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] disabled:opacity-30 text-slate-400 hover:text-white font-black rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm flex items-center justify-center"
+          >
+            <Delete className="w-5 h-5" />
+          </button>
+
+          {/* Row 4 */}
+          <button 
+            onClick={() => handleKeypad('0')} 
+            className="col-span-2 h-12 md:h-14 bg-[#162030] hover:bg-[#1d2a3f] active:bg-[#23334d] text-white font-black text-xl md:text-2xl rounded-2xl border border-white/[0.06] active:scale-95 transition-all shadow-sm"
+          >
+            0
+          </button>
+          <button 
+            onClick={submitScore} 
+            disabled={!inputVal}
+            className="col-span-2 h-12 md:h-14 bg-[#00f0a8] hover:bg-[#00d694] disabled:opacity-35 disabled:bg-[#1b2638] disabled:text-slate-500 text-[#0a0e17] font-black text-base uppercase tracking-wider rounded-2xl shadow-[0_0_20px_rgba(0,240,168,0.4)] active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Check className="w-5 h-5 stroke-[3]" />
+            <span>Enter Score</span>
+          </button>
         </div>
       </div>
 
+      {/* Do you want to end this match Dialog */}
       {showExitModal && (
-        <div className="fixed inset-0 z-[200] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-white/10 rounded-[32px] p-6 max-w-sm w-full shadow-2xl">
-            <div className="flex justify-between items-start mb-4">
-              <div className="w-12 h-12 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-400">
-                <Skull className="w-6 h-6" />
-              </div>
-              <button onClick={() => setShowExitModal(false)} className="text-slate-500 hover:text-white transition-colors">
-                <X className="w-6 h-6" />
-              </button>
+        <div className="fixed inset-0 z-[200] bg-[#0a0e17]/90 backdrop-blur-lg flex items-center justify-center p-5 animate-in fade-in duration-200">
+          <div className="bg-[#131b2a] border border-white/10 rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-[0_0_40px_rgba(0,0,0,0.8)] flex flex-col items-center text-center relative overflow-hidden">
+            {/* Top red glow flare */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 via-amber-500 to-rose-500 shadow-[0_0_15px_#f43f5e]" />
+
+            <div className="w-16 h-16 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-4 shadow-[0_0_20px_rgba(244,63,94,0.3)]">
+              <AlertTriangle className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-black text-white mb-2">Abandon Match?</h2>
-            <p className="text-slate-400 font-medium mb-8">Leaving now will discard all unsaved scores and turn data.</p>
-            <div className="flex flex-col gap-3">
-              <button onClick={() => { localStorage.removeItem('activeDartsGame'); navigate('/'); }} className="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-xl transition-colors text-lg shadow-lg shadow-rose-500/20 active:scale-95">
-                Yes, Leave Game
+
+            <h2 className="text-2xl font-black text-white mb-1 tracking-tight">
+              Do you want to end this match?
+            </h2>
+            <p className="text-slate-400 text-xs md:text-sm font-medium mb-6 leading-relaxed">
+              Ending the match will discard the current game progress and return you to the home dashboard.
+            </p>
+
+            <div className="flex flex-col gap-3 w-full">
+              <button 
+                onClick={() => { localStorage.removeItem('activeDartsGame'); navigate('/'); }} 
+                className="w-full bg-rose-500 hover:bg-rose-600 text-white font-black py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(244,63,94,0.35)] active:scale-95 cursor-pointer text-sm uppercase tracking-wider"
+              >
+                End Match
               </button>
-              <button onClick={() => setShowExitModal(false)} className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-xl transition-colors text-lg active:scale-95">
-                Cancel
+              <button 
+                onClick={() => setShowExitModal(false)} 
+                className="w-full bg-[#1b2537] hover:bg-[#223046] border border-white/10 text-slate-200 font-bold py-3.5 rounded-2xl transition-all active:scale-95 cursor-pointer text-sm"
+              >
+                Continue Playing
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Checkout Confirmation Modal */}
       {checkoutConfirmScore !== null && (
-        <div className="fixed inset-0 z-[300] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-emerald-500/30 rounded-[32px] p-6 max-w-sm w-full shadow-2xl">
-            <div className="flex flex-col items-center text-center mb-8 mt-2">
-              <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mb-5 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                <Target className="w-10 h-10" />
+        <div className="fixed inset-0 z-[300] bg-[#0a0e17]/85 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="bg-[#131b2a] border-2 border-[#00f0a8] rounded-3xl p-6 max-w-sm w-full shadow-[0_0_35px_rgba(0,240,168,0.3)]">
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-[#00f0a8]/15 border border-[#00f0a8]/40 flex items-center justify-center text-[#00f0a8] mb-4 shadow-[0_0_20px_rgba(0,240,168,0.3)]">
+                <Target className="w-8 h-8" />
               </div>
-              <h2 className="text-3xl md:text-3xl font-black text-white mb-2 tracking-tight">Did {activePlayer.name.split(' ')[0]} checkout?</h2>
-              <p className="text-slate-300 font-medium text-lg">Score entered:  <strong className="text-emerald-400 font-black">{checkoutConfirmScore}</strong></p>
+              <h2 className="text-2xl font-black text-white tracking-tight">Did {activePlayer.name.split(' ')[0]} checkout?</h2>
+              <p className="text-slate-300 text-sm mt-1">Score: <strong className="text-[#00f0a8] text-xl">{checkoutConfirmScore}</strong></p>
             </div>
             
             <div className="flex gap-3">
@@ -506,15 +737,15 @@ export default function Play({ onMatchComplete }) {
                    setCheckoutConfirmScore(null);
                    finalizeTurn(score, false);
                  }} 
-                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-black py-4 rounded-2xl transition-all text-xl shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
+                 className="flex-1 bg-[#00f0a8] hover:bg-[#00d694] text-[#0a0e17] font-black py-3.5 rounded-xl transition-all text-base shadow-lg shadow-[#00f0a8]/25 active:scale-95 cursor-pointer"
               >
-                Yes
+                Yes, Leg Won!
               </button>
               <button 
                  onClick={() => setCheckoutConfirmScore(null)} 
-                 className="flex-1 bg-white/5 hover:bg-white/10 text-white border border-white/5 font-bold py-4 rounded-2xl transition-colors active:scale-95 text-xl"
+                 className="flex-1 bg-[#1b2537] hover:bg-[#233045] text-slate-200 font-bold py-3.5 rounded-xl transition-all active:scale-95 text-base cursor-pointer"
               >
-                No
+                No, Keep Playing
               </button>
             </div>
           </div>
@@ -523,3 +754,4 @@ export default function Play({ onMatchComplete }) {
     </div>
   );
 }
+

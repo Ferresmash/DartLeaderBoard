@@ -1,9 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trophy, Target, TrendingUp, Skull, Calendar, User, ChevronRight } from 'lucide-react';
+import { Trophy, Target, TrendingUp, Skull, Calendar, User, ChevronRight, Award, BarChart2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import DartFlowHeader from '../components/DartFlowHeader';
 
-// Helper to get ISO week number securely
 function getWeekNumber(d) {
   d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
@@ -16,40 +16,54 @@ export default function PlayerDetail({ players, matches }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const player = players.find(p => p.id === id);
-  const [chartMetric, setChartMetric] = useState('wins'); // 'wins', 'winRate', 'avgScore', 'bustRate', 'highestCheckout'
+  const [chartMetric, setChartMetric] = useState('avgScore'); // avgScore, wins, winRate, bustRate, highestCheckout
   const [selectedWeekStart, setSelectedWeekStart] = useState(null);
 
-  // ── Lifetime stats (across ALL matches) ─────────────────────────────
+  // Player Rank in leaderboard
+  const rank = useMemo(() => {
+    const sorted = [...players].sort((a, b) => (b.totalWins || 0) - (a.totalWins || 0));
+    const idx = sorted.findIndex(p => p.id === id);
+    return idx >= 0 ? idx + 1 : '-';
+  }, [players, id]);
+
+  // Lifetime Stats
   const lifetimeStats = useMemo(() => {
+    if (!player) return { highestCheckout: 0, avgNineDarts: 0, bustPct: 0, avgScore: 0, count180s: 0, count100plus: 0 };
     let highestCheckout = 0;
     const nineDartTotals = [];
     let lifetimeBusts = 0;
     let lifetimeTotalThrows = 0;
+    let validThrows = 0;
+    let totalScore = 0;
+    let count180s = 0;
+    let count100plus = 0;
 
     matches.forEach(m => {
       if (!m.turns) return;
       const playerTurns = m.turns.filter(t => t.playerId === player.id);
       if (playerTurns.length === 0) return;
 
-      // ── Avg 9 Darts: first 3 turns = 9 darts ──
       const firstThree = playerTurns.slice(0, 3);
       nineDartTotals.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
 
-      // ── Highest Checkout: simulate running score ──
       let running = m.startingScore || 501;
       playerTurns.forEach(t => {
         lifetimeTotalThrows++;
         if (t.isBust) {
           lifetimeBusts++;
-          return; // score stays the same
+          return;
         }
+        validThrows++;
+        totalScore += t.score;
+        if (t.score === 180) count180s++;
+        if (t.score >= 100) count100plus++;
+
         running -= t.score;
         if (running === 0) {
           if (t.score > highestCheckout) highestCheckout = t.score;
-          running = m.startingScore || 501; // reset for next leg in same match
+          running = m.startingScore || 501;
         }
         if (running < 0) {
-          // shouldn't happen with valid data, but guard anyway
           running += t.score;
         }
       });
@@ -65,20 +79,21 @@ export default function PlayerDetail({ players, matches }) {
         ? Number(((lifetimeBusts / lifetimeTotalThrows) * 100).toFixed(1))
         : 0;
 
-    return { highestCheckout, avgNineDarts, bustPct };
-  }, [matches, player.id]);
+    const avgScore = validThrows > 0 ? Number((totalScore / validThrows).toFixed(1)) : 0;
 
-  // ── Weekly/Daily chart data ───────────────────────────────────────────
+    return { highestCheckout, avgNineDarts, bustPct, avgScore, count180s, count100plus };
+  }, [matches, player]);
+
+  // Chart data
   const chartData = useMemo(() => {
+    if (!player) return [];
     const data = [];
     const now = new Date();
     
     const periods = [];
     if (selectedWeekStart === null) {
-      // Generates last 10 weeks
       for (let i = 9; i >= 0; i--) {
         const d = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-        // Align to start of the week (Monday)
         const weekStart = new Date(d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1))).getTime();
         periods.push({
           start: weekStart,
@@ -88,7 +103,6 @@ export default function PlayerDetail({ players, matches }) {
         });
       }
     } else {
-      // Generate 7 days for the selected week
       for (let i = 0; i < 7; i++) {
         const dayStart = selectedWeekStart + i * 24 * 60 * 60 * 1000;
         const dObj = new Date(dayStart);
@@ -163,271 +177,215 @@ export default function PlayerDetail({ players, matches }) {
     });
     
     return data;
-  }, [matches, player.id, selectedWeekStart]);
+  }, [matches, player, selectedWeekStart]);
 
-  // ── Player Matches list ──────────────────────────────────────────────
   const playerMatches = useMemo(() => {
+    if (!player) return [];
     return matches
       .filter(m => 
         (m.participantIds && m.participantIds.includes(player.id)) || 
         m.winnerId === player.id
       )
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  }, [matches, player.id]);
+  }, [matches, player]);
 
-  const handleChartClick = (data) => {
-    if (data?.activePayload?.[0]?.payload?.weekStart) {
-      setSelectedWeekStart(data.activePayload[0].payload.weekStart);
-    } else if (data?.activeTooltipIndex !== undefined && chartData[data.activeTooltipIndex]?.weekStart) {
-      setSelectedWeekStart(chartData[data.activeTooltipIndex].weekStart);
-    }
-  };
+  const winRateCalculated = player?.gamesPlayed 
+    ? Math.round((player.totalWins / player.gamesPlayed) * 100) 
+    : player?.winRate || 0;
 
   if (!player) return <div className="p-8 text-center text-white">Player not found</div>;
 
   return (
-    <div className="pb-28 min-h-[100dvh] flex flex-col items-center relative overflow-x-hidden md:px-12 bg-slate-950 font-sans">
-      <div className="absolute top-0 w-full h-96 bg-gradient-to-b from-indigo-900/40 to-transparent -z-10"></div>
-      
-      <div className="w-full max-w-5xl flex flex-col md:flex-row mt-8 px-6 md:px-0 gap-8">
-        
-        {/* Left Side: Avatar/Full Image */}
-        <div className="flex flex-col items-center md:sticky md:top-8 w-full md:w-[400px]">
-          {/* Mobile Image (Circle Cut) */}
-          <div className="md:hidden w-36 h-36 rounded-full p-1.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-2xl shadow-indigo-500/20 mb-8 mt-4">
-            <img src={player.pfpUrl || null} alt={player.name} className="w-full h-full rounded-full object-cover border-[6px] border-slate-950" />
-          </div>
-          
-          {/* Desktop Image (Full Image, Transparent Background) */}
-          <div className="hidden md:block w-full max-h-[500px] mb-12 drop-shadow-[0_20px_20px_rgba(99,102,241,0.2)]">
-            <img src={player.pfpUrl || null} alt={player.name} className="w-full h-full object-contain" />
-          </div>
-          
-          <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight text-center">{player.name}</h1>
-        </div>
-        
-        {/* Right Side: Data */}
-        <div className="flex-1 w-full flex flex-col">
-          <div className="grid grid-cols-3 gap-2 md:gap-4 w-full mb-8">
-            <div className="bg-white/[0.03] border border-white/5 p-4 md:p-6 rounded-3xl flex flex-col items-center justify-center shadow-lg hover:bg-white/[0.05] transition-colors relative overflow-hidden group">
-              <div className="absolute inset-0 bg-indigo-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="w-10 h-10 md:w-16 md:h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mb-2 md:mb-3 relative z-10">
-                <Trophy className="w-5 h-5 md:w-8 md:h-8 text-indigo-400" />
-              </div>
-              <p className="text-slate-400 text-xs md:text-base font-medium truncate w-full text-center relative z-10">Total Wins</p>
-              <p className="text-2xl md:text-5xl font-black text-white leading-tight relative z-10">{player.totalWins}</p>
-            </div>
-            
-            <div className="bg-white/[0.03] border border-white/5 p-4 md:p-6 rounded-3xl flex flex-col items-center justify-center shadow-lg hover:bg-white/[0.05] transition-colors relative overflow-hidden group">
-              <div className="absolute inset-0 bg-pink-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="w-10 h-10 md:w-16 md:h-16 rounded-full bg-pink-500/10 flex items-center justify-center mb-2 md:mb-3 relative z-10">
-                <Target className="w-5 h-5 md:w-8 md:h-8 text-pink-400" />
-              </div>
-              <p className="text-slate-400 text-xs md:text-base font-medium truncate w-full text-center relative z-10">Best Score</p>
-              <p className="text-2xl md:text-5xl font-black text-white leading-tight relative z-10">{player.bestScore}</p>
-            </div>
-            
-            <div className="bg-white/[0.03] border border-white/5 p-4 md:p-6 rounded-3xl flex flex-col items-center justify-center shadow-lg hover:bg-white/[0.05] transition-colors relative overflow-hidden group">
-              <div className="absolute inset-0 bg-emerald-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="w-10 h-10 md:w-16 md:h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-2 md:mb-3 relative z-10">
-                <TrendingUp className="w-5 h-5 md:w-8 md:h-8 text-emerald-400" />
-              </div>
-              <p className="text-slate-400 text-xs md:text-base font-medium truncate w-full text-center relative z-10">Winrate</p>
-              <p className="text-2xl md:text-5xl font-black text-white leading-tight relative z-10">{player.gamesPlayed ? Math.round((player.totalWins / player.gamesPlayed)*100) : 0}%</p>
-            </div>
-          </div>
+    <div className="min-h-[100dvh] bg-[#0a0e17] font-sans pb-28 md:pb-12 flex flex-col">
+      <DartFlowHeader showBack />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mb-8">
-            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-3xl flex items-center gap-6 shadow-lg hover:bg-white/[0.05] transition-colors relative overflow-hidden group">
-               <div className="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center">
-                  <Skull className="w-7 h-7 text-rose-400" />
-               </div>
-               <div>
-                  <p className="text-slate-400 text-sm font-medium">Bust %</p>
-                  <p className="text-2xl font-black text-white">{lifetimeStats.bustPct}%</p>
-               </div>
-            </div>
-            
-            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-3xl flex items-center gap-6 shadow-lg hover:bg-white/[0.05] transition-colors relative overflow-hidden group">
-               <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center">
-                  <TrendingUp className="w-7 h-7 text-indigo-400" />
-               </div>
-               <div>
-                  <p className="text-slate-400 text-sm font-medium">Avg 9 Darts</p>
-                  <p className="text-3xl font-black text-white">{lifetimeStats.avgNineDarts}</p>
-               </div>
-            </div>
-
-            <div className="bg-white/[0.03] border border-white/5 p-6 rounded-3xl flex items-center gap-6 shadow-lg hover:bg-white/[0.05] transition-colors relative overflow-hidden group">
-               <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
-                  <Target className="w-7 h-7 text-emerald-400" />
-               </div>
-               <div>
-                  <p className="text-slate-400 text-sm font-medium">Highest Checkout</p>
-                  <p className="text-3xl font-black text-white">{lifetimeStats.highestCheckout || '—'}</p>
-               </div>
-            </div>
-          </div>
-
-          <div className="w-full bg-white/[0.02] border border-white/5 p-5 md:p-8 rounded-3xl shadow-xl flex-1 backdrop-blur-sm">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-              <div className="flex items-center gap-3">
-                {selectedWeekStart !== null && (
-                  <button 
-                    onClick={() => setSelectedWeekStart(null)}
-                    className="p-1.5 bg-white/5 hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-300 rounded-lg transition-colors border border-white/5 hover:border-indigo-500/30"
-                    title="Back to Weekly View"
-                  >
-                     <ArrowLeft className="w-5 h-5" />
-                  </button>
-                )}
-                <h3 className="font-bold text-xl md:text-2xl text-slate-100 flex items-center gap-2">
-                  {selectedWeekStart === null ? "10-Week Trend" : `Week ${getWeekNumber(new Date(selectedWeekStart))} Trend`}
-                </h3>
-              </div>
-              <select 
-                value={chartMetric}
-                onChange={e => setChartMetric(e.target.value)}
-                className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-4 py-2 rounded-xl text-sm font-bold tracking-wide focus:outline-none focus:border-indigo-500/50 cursor-pointer shadow-lg active:scale-95 transition-all"
-              >
-                <option value="wins" className="bg-slate-900">Wins</option>
-                <option value="winRate" className="bg-slate-900">Win Rate %</option>
-                <option value="avgScore" className="bg-slate-900">Average Score</option>
-                <option value="bustRate" className="bg-slate-900">Bust Rate %</option>
-                <option value="highestCheckout" className="bg-slate-900">Highest Checkout</option>
-              </select>
-            </div>
-            
-            <div className="h-48 md:h-64 mt-4 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart 
-                  data={chartData} 
-                  margin={{ top: 5, right: 15, left: -20, bottom: 25 }}
-                  onClick={handleChartClick}
-                  className="focus:outline-none"
-                  style={selectedWeekStart === null ? { cursor: 'pointer', outline: 'none' } : { outline: 'none' }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 11}} dy={8} axisLine={false} tickLine={false} />
-                  <YAxis stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.4)', fontSize: 12}} axisLine={false} tickLine={false} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(99,102,241,0.2)', borderRadius: '16px', color: '#f8fafc', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}
-                    itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
-                    labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
-                    formatter={(value) => {
-                       if (chartMetric.includes('Rate')) return [`${value}%`];
-                       return [value];
-                    }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey={chartMetric} 
-                    stroke="#818cf8" 
-                    strokeWidth={4} 
-                    dot={{ r: 4, fill: "#818cf8", strokeWidth: 2, stroke: "#0f172a" }} 
-                    activeDot={{ 
-                      onClick: (e, payload) => {
-                        if (payload?.payload?.weekStart) {
-                          setSelectedWeekStart(payload.payload.weekStart);
-                        }
-                      },
-                      r: 8, fill: "#f472b6", stroke: "#0f172a", strokeWidth: 3, cursor: 'pointer' 
-                    }} 
-                    animationDuration={1500}
-                    animationEasing="ease-out"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="w-full mt-12 mb-8">
-            <h3 className="font-bold text-xl md:text-2xl text-slate-100 mb-6 flex items-center gap-3">
-              <Calendar className="w-6 h-6 text-indigo-400" />
-              Match History
-            </h3>
-            
-            <div className="grid gap-3">
-              {playerMatches.length > 0 ? (
-                playerMatches.map(m => {
-                  const pIds = m.participantIds || (m.turns ? [...new Set(m.turns.map(t => t.playerId))] : []);
-                  const opponents = players.filter(p => pIds.includes(p.id) && p.id !== player.id);
-                  const isWinner = m.winnerId === player.id;
-                  const date = m.timestamp ? new Date(m.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown Date';
-                  
-                  // Handle guest names for opponents if any
-                  let opponentText = opponents.length > 0 ? opponents.map(o => o.name).join(', ') : 'Unknown';
-                  if (opponents.length === 0 && pIds.length > 1) {
-                     // Might be guests
-                     const guestIds = pIds.filter(pid => pid !== player.id && pid.startsWith('guest__'));
-                     if (guestIds.length > 0) {
-                        opponentText = guestIds.map(gid => {
-                           try { return decodeURIComponent(gid.split('__')[1]) + ' (Guest)'; }
-                           catch(e) { return 'Guest'; }
-                        }).join(', ');
-                     }
-                  }
-                  
-                  return (
-                    <div 
-                      key={m.id}
-                      onClick={() => navigate(`/matches/${m.id}`)}
-                      className={`group p-4 md:p-5 rounded-3xl cursor-pointer transition-all duration-300 border flex items-center justify-between relative overflow-hidden ${
-                        isWinner 
-                          ? 'bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/40 shadow-lg shadow-emerald-500/5' 
-                          : 'bg-rose-500/10 border-rose-500/20 hover:bg-rose-500/20 hover:border-rose-500/40 shadow-lg shadow-rose-500/5'
-                      }`}
-                    >
-                      {/* Status Indicator Bar */}
-                      <div className={`absolute left-0 top-0 bottom-0 w-2 ${isWinner ? 'bg-emerald-500' : 'bg-rose-500'} shadow-[0_0_15px_rgba(0,0,0,0.3)]`}></div>
-                      
-                      <div className="flex items-center gap-4 md:gap-6 pl-3">
-                        <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${isWinner ? 'bg-emerald-400/20 text-emerald-400' : 'bg-rose-400/20 text-rose-400'}`}>
-                           {isWinner ? <Trophy className="w-6 h-6 md:w-8 md:h-8" /> : <Skull className="w-6 h-6 md:w-8 md:h-8" />}
-                        </div>
-                        
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-white font-black text-lg md:text-xl tracking-tight">{isWinner ? 'Victory' : 'Defeat'}</span>
-                            <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">• {date}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-slate-400 text-sm font-medium">
-                            <User className="w-4 h-4 text-slate-500" />
-                            <span className="truncate max-w-[140px] md:max-w-xs">
-                              vs {opponentText}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <div className="hidden md:flex flex-col items-end mr-6">
-                           <span className="text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-0.5">Start Score</span>
-                           <span className="text-white font-black text-xl">{m.startingScore || 501}</span>
-                        </div>
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 group-hover:bg-white/10 transition-colors">
-                          <ChevronRight className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
+      <div className="max-w-4xl mx-auto w-full px-5 py-6 flex flex-col gap-6">
+        {/* Profile Header (matches Screen 4) */}
+        <div className="flex items-center gap-4 bg-[#131b2a] border border-white/[0.08] p-4 md:p-6 rounded-3xl shadow-xl">
+          <div className="relative">
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-[#00f0a8] shadow-[0_0_15px_rgba(0,240,168,0.3)] bg-[#1a2336] flex items-center justify-center">
+              {player.pfpUrl ? (
+                <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover" />
               ) : (
-                <div className="bg-white/[0.02] border border-dashed border-white/10 rounded-3xl p-12 flex flex-col items-center justify-center text-slate-500">
-                  <p className="font-medium italic">No matches recorded yet</p>
-                </div>
+                <span className="font-extrabold text-white text-2xl uppercase">{player.name.substring(0, 2)}</span>
               )}
             </div>
           </div>
+
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight truncate">{player.name}</h1>
+            <p className="text-slate-400 text-xs font-semibold mt-0.5">Competitor Profile</p>
+          </div>
+
+          <div className="bg-[#1b2537] border border-white/10 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Rank</span>
+            <span className="text-sm font-black text-[#00f0a8]">#{rank}</span>
+          </div>
+        </div>
+
+        {/* Core Stat Cards with Neon Underlines (matches Screen 4) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+          {/* Card 1: Player Avg */}
+          <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-4 shadow-lg relative overflow-hidden flex flex-col justify-between">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Avg Pts</span>
+            <span className="text-3xl font-black text-white my-1">{lifetimeStats.avgScore || player.avgScore || '0.0'}</span>
+            <div className="w-full h-1 bg-[#a855f7] rounded-full shadow-[0_0_8px_#a855f7] mt-1" />
+          </div>
+
+          {/* Card 2: 9 Darts Avg */}
+          <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-4 shadow-lg relative overflow-hidden flex flex-col justify-between">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Avg 9 Darts</span>
+            <span className="text-3xl font-black text-white my-1">{lifetimeStats.avgNineDarts || '0.0'}</span>
+            <div className="w-full h-1 bg-[#00f0a8] rounded-full shadow-[0_0_8px_#00f0a8] mt-1" />
+          </div>
+
+          {/* Card 3: 180s / Best Score */}
+          <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-4 shadow-lg relative overflow-hidden flex flex-col justify-between">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">High Score</span>
+            <span className="text-3xl font-black text-white my-1">{player.bestScore || 0}</span>
+            <div className="w-full h-1 bg-[#f97316] rounded-full shadow-[0_0_8px_#f97316] mt-1" />
+          </div>
+
+          {/* Card 4: Checkout % / Highest Checkout */}
+          <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-4 shadow-lg relative overflow-hidden flex flex-col justify-between">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Checkout</span>
+            <span className="text-3xl font-black text-white my-1">{lifetimeStats.highestCheckout || '—'}</span>
+            <div className="w-full h-1 bg-[#22d3ee] rounded-full shadow-[0_0_8px_#22d3ee] mt-1" />
+          </div>
+        </div>
+
+        {/* Secondary Row: Wins & Winrate Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+          <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-3.5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00f0a8]/10 flex items-center justify-center text-[#00f0a8]">
+              <Trophy className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Wins</span>
+              <span className="text-xl font-black text-white">{player.totalWins || 0}</span>
+            </div>
+          </div>
+
+          <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-3.5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#a855f7]/10 flex items-center justify-center text-[#a855f7]">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Winrate</span>
+              <span className="text-xl font-black text-white">{winRateCalculated}%</span>
+            </div>
+          </div>
+
+          <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-3.5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#f43f5e]/10 flex items-center justify-center text-rose-400">
+              <Skull className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Bust Rate</span>
+              <span className="text-xl font-black text-white">{lifetimeStats.bustPct}%</span>
+            </div>
+          </div>
+
+          <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-3.5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#f97316]/10 flex items-center justify-center text-[#f97316]">
+              <Award className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">100+ Throws</span>
+              <span className="text-xl font-black text-white">{lifetimeStats.count100plus}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Trend Performance Wave Chart */}
+        <div className="bg-[#131b2a] border border-white/[0.08] p-5 rounded-3xl shadow-xl flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-extrabold text-white text-base">Performance Trend</h3>
+            <select
+              value={chartMetric}
+              onChange={e => setChartMetric(e.target.value)}
+              className="bg-[#1b2537] border border-white/10 text-[#00f0a8] text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer focus:outline-none"
+            >
+              <option value="avgScore">Average Score</option>
+              <option value="wins">Wins</option>
+              <option value="winRate">Win Rate %</option>
+              <option value="highestCheckout">Checkout</option>
+              <option value="bustRate">Bust Rate %</option>
+            </select>
+          </div>
+
+          <div className="h-56 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} dy={6} axisLine={false} tickLine={false} />
+                <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#101726', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                  itemStyle={{ color: '#00f0a8', fontWeight: 'bold' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey={chartMetric} 
+                  stroke="#00f0a8" 
+                  strokeWidth={3} 
+                  dot={{ r: 3, fill: "#00f0a8", stroke: "#0a0e17", strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: "#2dd4bf", stroke: "#0a0e17", strokeWidth: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Recent Games History (matches Screen 4) */}
+        <div className="flex flex-col gap-3">
+          <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-[#00f0a8]" />
+            <span>Recent Games History</span>
+          </h3>
+
+          <div className="grid gap-2.5">
+            {playerMatches.length > 0 ? (
+              playerMatches.slice(0, 8).map(m => {
+                const isWinner = m.winnerId === player.id;
+                const pIds = m.participantIds || [];
+                const opponents = players.filter(p => pIds.includes(p.id) && p.id !== player.id);
+                const opponentName = opponents.length > 0 ? opponents.map(o => o.name).join(', ') : 'Opponent';
+                const date = m.timestamp ? new Date(m.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => navigate(`/matches/${m.id}`)}
+                    className="bg-[#131b2a] hover:bg-[#182337] border border-white/[0.08] p-3.5 rounded-2xl flex items-center justify-between transition-all cursor-pointer shadow-sm group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${
+                        isWinner ? 'bg-[#00f0a8]/15 text-[#00f0a8]' : 'bg-rose-500/15 text-rose-400'
+                      }`}>
+                        {isWinner ? 'W' : 'L'}
+                      </div>
+                      <div>
+                        <span className="font-bold text-white text-sm block">vs {opponentName}</span>
+                        <span className="text-[10px] text-slate-500 font-semibold uppercase">{date} • {m.startingScore || 501}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-7 h-7 rounded-full bg-white/5 group-hover:bg-white/10 flex items-center justify-center text-slate-400">
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-8 text-center bg-[#131b2a] rounded-2xl border border-white/5 text-slate-500 text-xs font-semibold">
+                No match records found.
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      
-      <button 
-        onClick={() => navigate(-1)} 
-        className="absolute top-4 left-4 md:top-8 md:left-8 p-3 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-colors text-slate-300 shadow-xl z-20"
-      >
-        <ArrowLeft className="w-5 h-5 md:w-6 md:h-6" />
-      </button>
     </div>
   );
 }
+
