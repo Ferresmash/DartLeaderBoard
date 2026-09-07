@@ -341,15 +341,74 @@ export default function Play({ onMatchComplete }) {
         {inputMethod === 'dartboard' ? (
           <div className="flex-1 flex flex-col justify-end mt-1"><InteractiveDartboard onScoreSubmit={(s) => finalizeTurn(s, false)} onBust={handleExplicitBust} activePlayerName={activePlayer.name} startingScore={startingScore} currentScore={activePlayer.currentScore} /></div>
         ) : (
-          <div className="flex flex-col justify-end">
-            <div className="my-2 bg-[#121927] border border-white/10 rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-inner">
-              <span className="text-base font-mono font-extrabold text-[#00f0a8]">{inputVal || 0}</span>
-              {inputVal && <button onClick={handleBackspace} className="text-slate-400"><Delete className="w-5 h-5" /></button>}
+          <div className="flex flex-col justify-end w-full max-w-md mx-auto">
+            {/* Input display bar with Target icon, current typed score, Backspace and Check buttons */}
+            <div className="my-2 bg-[#121927] border border-white/10 rounded-2xl p-2 md:p-2.5 flex items-center justify-between shadow-inner relative h-14 md:h-16 shrink-0">
+              <div className="w-9 flex items-center justify-center text-slate-500">
+                <Target className="w-5 h-5 text-slate-400" />
+              </div>
+
+              <div className="flex-1 flex flex-col justify-center items-center px-2 overflow-hidden">
+                <span className="text-2xl md:text-3xl font-black text-white tracking-wider leading-tight truncate">
+                  {inputVal || '-'}
+                </span>
+                {inputVal.includes('+') && (
+                  <span className="text-[#00f0a8] font-bold text-[11px] md:text-xs uppercase tracking-wider">
+                    Total: {currentCalculatedTotal}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 h-full">
+                <button 
+                  onClick={handleBackspace} 
+                  disabled={!inputVal} 
+                  className="h-full px-3 md:px-4 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-20 text-rose-400 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                  title="Backspace"
+                >
+                  <Delete className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={submitScore} 
+                  disabled={!inputVal} 
+                  className="h-full px-3 md:px-5 rounded-xl bg-[#00f0a8] hover:bg-[#00f0a8]/90 text-[#0a0e17] font-black flex items-center justify-center disabled:opacity-20 shadow-lg shadow-[#00f0a8]/20 active:scale-95 transition-all cursor-pointer"
+                  title="Submit Score"
+                >
+                  <Check className="w-6 h-6 stroke-[3]" />
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-4 gap-2 mb-2">
-              {[1,2,3,'+',4,5,6,'Bust',7,8,9,'Del',0,'Enter'].map((btn, i) => (
-                <button key={i} onClick={() => btn === 'Enter' ? submitScore() : btn === 'Del' ? handleBackspace() : btn === 'Bust' ? handleExplicitBust() : handleKeypad(String(btn))} className={clsx("h-12 rounded-2xl font-black text-xl", btn === 'Enter' ? "col-span-2 bg-[#00f0a8] text-[#0a0e17]" : "bg-[#162030] text-white")}>{btn}</button>
+
+            {/* 3x3 Keypad + Bottom Row [Bust, 0, +] */}
+            <div className="grid grid-cols-3 gap-2 mb-2 w-full">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                <button 
+                  key={num} 
+                  onClick={() => handleKeypad(num.toString())}
+                  className="h-11 md:h-13 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer"
+                >
+                  {num}
+                </button>
               ))}
+              <button 
+                onClick={handleExplicitBust}
+                disabled={isSuddenDeath}
+                className="h-11 md:h-13 bg-rose-500/15 hover:bg-rose-500/25 disabled:opacity-25 disabled:cursor-not-allowed text-rose-400 font-extrabold text-base rounded-2xl active:scale-95 transition-all shadow-md border border-rose-500/25 flex items-center justify-center uppercase tracking-wider cursor-pointer"
+              >
+                Bust
+              </button>
+              <button 
+                onClick={() => handleKeypad('0')}
+                className="h-11 md:h-13 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer"
+              >
+                0
+              </button>
+              <button 
+                onClick={() => handleKeypad('+')}
+                className="h-11 md:h-13 bg-[#00f0a8]/15 hover:bg-[#00f0a8]/25 text-[#00f0a8] font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-[#00f0a8]/25 flex items-center justify-center cursor-pointer"
+              >
+                +
+              </button>
             </div>
           </div>
         )}
