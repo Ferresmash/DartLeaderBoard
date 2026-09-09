@@ -52,19 +52,19 @@ export default function Navigation() {
       </nav>
 
       {/* Bottom Nav - Mobile Only Dock */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-4 pb-3 pt-1 pointer-events-none">
-        <div className="max-w-md mx-auto bg-[#101726]/95 backdrop-blur-2xl border border-white/10 rounded-[28px] p-2 shadow-[0_10px_35px_rgba(0,0,0,0.7)] pointer-events-auto">
-          <ul className="flex justify-around items-center">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-2.5 pb-2.5 pt-1 pointer-events-none">
+        <div className="max-w-md mx-auto bg-[#101726]/95 backdrop-blur-2xl border border-white/10 rounded-[24px] px-1 py-1.5 shadow-[0_10px_35px_rgba(0,0,0,0.7)] pointer-events-auto">
+          <ul className="grid grid-cols-5 items-center w-full">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isMain = item.isMainAction;
               
               return (
-                <li key={item.to} className="flex-1 flex justify-center">
+                <li key={item.to} className="flex justify-center items-center min-w-0 w-full">
                   <NavLink
                     to={item.to}
                     className={({ isActive }) => clsx(
-                      "flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all duration-300 relative",
+                      "w-full flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all duration-200 relative",
                       isMain && "-mt-4"
                     )}
                   >
@@ -72,29 +72,29 @@ export default function Navigation() {
                       <>
                         {isMain ? (
                           <div className={clsx(
-                            "w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 border-4 border-[#0a0e17]",
+                            "w-12 h-12 sm:w-13 sm:h-13 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 border-[3px] border-[#0a0e17]",
                             isActive 
-                              ? "bg-gradient-to-tr from-[#00f0a8] to-[#2dd4bf] text-[#0a0e17] shadow-[0_0_25px_rgba(0,240,168,0.6)] scale-110" 
+                              ? "bg-gradient-to-tr from-[#00f0a8] to-[#2dd4bf] text-[#0a0e17] shadow-[0_0_25px_rgba(0,240,168,0.6)] scale-105" 
                               : "bg-[#1b2537] text-slate-300 hover:text-white border-white/10"
                           )}>
-                            <Icon className="w-7 h-7" />
+                            <Icon className="w-6 h-6" />
                           </div>
                         ) : (
                           <div className={clsx(
-                            "w-11 h-10 rounded-xl flex flex-col items-center justify-center transition-all duration-200",
+                            "w-9 h-8 sm:w-10 sm:h-9 rounded-lg flex flex-col items-center justify-center transition-all duration-200",
                             isActive 
                               ? "text-[#00f0a8] bg-[#00f0a8]/10" 
                               : "text-slate-400 hover:text-slate-200"
                           )}>
-                            <Icon className="w-5 h-5" />
+                            <Icon className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
                             {isActive && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#00f0a8] shadow-[0_0_8px_#00f0a8] mt-0.5" />
+                              <span className="w-1 h-1 rounded-full bg-[#00f0a8] shadow-[0_0_6px_#00f0a8] mt-0.5" />
                             )}
                           </div>
                         )}
                         {!isMain && (
                           <span className={clsx(
-                            "text-[9px] font-bold tracking-wider uppercase mt-0.5 transition-colors",
+                            "text-[8.5px] sm:text-[9px] font-bold tracking-tight uppercase mt-0.5 transition-colors truncate max-w-full text-center leading-none",
                             isActive ? "text-[#00f0a8]" : "text-slate-400"
                           )}>
                             {item.label}
