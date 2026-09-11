@@ -3,58 +3,31 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronRight, TrendingUp, ArrowLeft, Trophy, Target, Star, Skull, Award } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import DartFlowHeader from '../components/DartFlowHeader';
-
-function getWeekNumber(d) {
-  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-  const weekNo = Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
-  return weekNo;
-}
+import { 
+  getWeekNumber, 
+  isMatchInTimeSpan, 
+  isInOfficeMatch, 
+  getThisWeekBounds, 
+  getSwedishParts 
+} from '../utils/dateUtils';
 
 export default function Home({ players, matches }) {
   const navigate = useNavigate();
-  const [timeSpan, setTimeSpan] = useState('7_days');
+  const [timeSpan, setTimeSpan] = useState('this_week');
   const [statType, setStatType] = useState('wins');
   const [onlyInOffice, setOnlyInOffice] = useState(true);
   
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [selectedWeekStart, setSelectedWeekStart] = useState(null);
 
-  const isInOfficeMatch = (m) => {
-    if (!m || !m.timestamp) return false;
-    const date = new Date(m.timestamp);
-    const day = date.getDay();
-    const hour = date.getHours();
-
-    const isWorkHours = day >= 1 && day <= 5 && hour >= 7 && hour < 18;
-    if (!isWorkHours) return false;
-
-    if (!m.participantIds || !Array.isArray(m.participantIds)) return false;
-
-    const companyParticipants = m.participantIds.filter(
-      id => typeof id === 'string' && !id.startsWith('guest')
-    );
-
-    return companyParticipants.length > 1;
-  };
-
   const leaderboard = useMemo(() => {
-    const now = new Date().getTime();
-    
     return players.map(p => {
       let activeMatches = matches;
       if (onlyInOffice) {
         activeMatches = matches.filter(isInOfficeMatch);
       }
       
-      const timeFilteredMatches = activeMatches.filter(m => {
-        if (timeSpan === 'all_time') return true;
-        const diffDays = (now - m.timestamp) / (1000 * 60 * 60 * 24);
-        if (timeSpan === '7_days') return diffDays <= 7;
-        if (timeSpan === '30_days') return diffDays <= 30;
-        return true;
-      });
+      const timeFilteredMatches = activeMatches.filter(m => isMatchInTimeSpan(m, timeSpan));
 
       const playerWinnerMatches = timeFilteredMatches.filter(m => m.winnerId === p.id);
       const filteredWins = playerWinnerMatches.length;
@@ -240,8 +213,8 @@ export default function Home({ players, matches }) {
   };
 
   const timeLabels = {
-    '7_days': 'Last 7 Days',
-    '30_days': 'Last 30 Days',
+    'this_week': 'This Week',
+    'this_month': 'This Month',
     'all_time': 'All Time'
   };
 
@@ -289,8 +262,8 @@ export default function Home({ players, matches }) {
                 onChange={(e) => setTimeSpan(e.target.value)}
                 className="appearance-none bg-[#0e1420] border border-white/10 text-white px-3.5 py-2 pr-8 rounded-xl font-bold text-xs focus:outline-none focus:border-[#00f0a8] cursor-pointer"
               >
-                <option value="7_days" className="bg-[#131b2a]">Last 7 Days</option>
-                <option value="30_days" className="bg-[#131b2a]">Last 30 Days</option>
+                <option value="this_week" className="bg-[#131b2a]">This Week</option>
+                <option value="this_month" className="bg-[#131b2a]">This Month</option>
                 <option value="all_time" className="bg-[#131b2a]">All Time</option>
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />

@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Users, TrendingUp, Calendar, CheckCircle2, Trophy, Target, Zap } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import DartFlowHeader from '../components/DartFlowHeader';
+import { 
+  getWeekNumber, 
+  getThisWeekDays, 
+  getThisMonthDays, 
+  getThisWeekBounds 
+} from '../utils/dateUtils';
 
 export default function CompareStats({ players, matches }) {
   const navigate = useNavigate();
@@ -50,7 +56,7 @@ export default function CompareStats({ players, matches }) {
     return sorted.map(p => p.id).slice(0, 2);
   });
   const [metric, setMetric] = useState('avgScore'); // avgScore, wins, winRate, highestCheckout, avgNineDarts, bustRate
-  const [duration, setDuration] = useState('all_time'); // 7_days, 30_days, all_time
+  const [duration, setDuration] = useState('this_week'); // this_week, this_month, all_time
 
   // Signature DartFlow Line Colors (Teal, Purple, Orange, Gold, Cyan, Rose)
   const colors = [
@@ -121,35 +127,28 @@ export default function CompareStats({ players, matches }) {
   const chartData = useMemo(() => {
     if (selectedPlayerIds.length === 0) return [];
 
-    const now = new Date();
-    const periods = [];
+    let periods = [];
 
-    if (duration === '7_days') {
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        periods.push({
-          start: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(),
-          end: new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(),
-          name: d.toLocaleDateString(undefined, { weekday: 'short' })
-        });
-      }
-    } else if (duration === '30_days') {
-      for (let i = 29; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        periods.push({
-          start: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(),
-          end: new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(),
-          name: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-        });
-      }
+    if (duration === 'this_week') {
+      periods = getThisWeekDays().map(d => ({
+        start: d.start,
+        end: d.end,
+        name: d.name
+      }));
+    } else if (duration === 'this_month') {
+      periods = getThisMonthDays().map(d => ({
+        start: d.start,
+        end: d.end,
+        name: d.shortName || d.name
+      }));
     } else {
+      const { start: thisMon } = getThisWeekBounds();
       for (let i = 9; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-        const weekStart = new Date(d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1))).getTime();
+        const weekStart = thisMon - i * 7 * 24 * 60 * 60 * 1000;
         periods.push({
           start: weekStart,
           end: weekStart + 7 * 24 * 60 * 60 * 1000,
-          name: `W${i === 0 ? 'Now' : i}`
+          name: `W${getWeekNumber(weekStart)}`
         });
       }
     }
@@ -339,8 +338,8 @@ export default function CompareStats({ players, matches }) {
 
             <div className="flex gap-1.5 shrink-0">
               {[
-                { id: '7_days', label: '7D' },
-                { id: '30_days', label: '30D' },
+                { id: 'this_week', label: 'Week' },
+                { id: 'this_month', label: 'Month' },
                 { id: 'all_time', label: 'All' }
               ].map(d => (
                 <button

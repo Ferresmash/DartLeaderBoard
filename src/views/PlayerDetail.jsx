@@ -3,14 +3,10 @@ import { Trophy, Target, TrendingUp, Skull, Calendar, User, ChevronRight, Award,
 import { useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import DartFlowHeader from '../components/DartFlowHeader';
-
-function getWeekNumber(d) {
-  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-  const weekNo = Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
-  return weekNo;
-}
+import { 
+  getWeekNumber, 
+  getThisWeekBounds 
+} from '../utils/dateUtils';
 
 export default function PlayerDetail({ players, matches }) {
   const { id } = useParams();
@@ -88,29 +84,27 @@ export default function PlayerDetail({ players, matches }) {
   const chartData = useMemo(() => {
     if (!player) return [];
     const data = [];
-    const now = new Date();
     
     const periods = [];
     if (selectedWeekStart === null) {
+      const { start: thisMon } = getThisWeekBounds();
       for (let i = 9; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-        const weekStart = new Date(d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1))).getTime();
+        const weekStart = thisMon - i * 7 * 24 * 60 * 60 * 1000;
         periods.push({
           start: weekStart,
           end: weekStart + 7 * 24 * 60 * 60 * 1000,
-          name: `W${getWeekNumber(new Date(weekStart))}`,
+          name: `W${getWeekNumber(weekStart)}`,
           weekStart
         });
       }
     } else {
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       for (let i = 0; i < 7; i++) {
         const dayStart = selectedWeekStart + i * 24 * 60 * 60 * 1000;
-        const dObj = new Date(dayStart);
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         periods.push({
           start: dayStart,
           end: dayStart + 24 * 60 * 60 * 1000,
-          name: dayNames[dObj.getDay()],
+          name: dayNames[i],
           weekStart: null 
         });
       }
