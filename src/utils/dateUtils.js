@@ -2,34 +2,42 @@
 
 export const SWEDISH_TZ = 'Europe/Stockholm';
 
+// Single reused formatter instance to avoid expensive ICU context creation in loops
+const swedishFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: SWEDISH_TZ,
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  weekday: 'short',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+  hour12: false
+});
+
+const DAY_MAP = { 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 7 };
+
+// Timestamp lookup cache to completely eliminate repetitive formatting
+const partsCache = new Map();
+
 /**
  * Extracts Swedish date parts (year, month 1-12, day 1-31, weekday 1=Mon..7=Sun, hour 0-23, minute, second)
  * @param {number|Date} timestamp 
  */
 export function getSwedishParts(timestamp = Date.now()) {
-  const d = typeof timestamp === 'number' ? new Date(timestamp) : timestamp;
-  const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: SWEDISH_TZ,
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    weekday: 'short',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hour12: false
-  });
+  const ts = typeof timestamp === 'number' ? timestamp : timestamp.getTime();
+  const cached = partsCache.get(ts);
+  if (cached) return cached;
 
-  const parts = formatter.formatToParts(d);
+  const parts = swedishFormatter.formatToParts(ts);
   const obj = {};
-  for (const p of parts) {
-    obj[p.type] = p.value;
+  for (let i = 0; i < parts.length; i++) {
+    obj[parts[i].type] = parts[i].value;
   }
 
-  const dayMap = { 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 7 };
-  const weekdayNum = dayMap[obj.weekday] || 1;
+  const weekdayNum = DAY_MAP[obj.weekday] || 1;
 
-  return {
+  const result = {
     year: parseInt(obj.year, 10),
     month: parseInt(obj.month, 10), // 1 - 12
     day: parseInt(obj.day, 10),     // 1 - 31
@@ -39,6 +47,12 @@ export function getSwedishParts(timestamp = Date.now()) {
     minute: parseInt(obj.minute, 10),
     second: parseInt(obj.second, 10)
   };
+
+  if (partsCache.size > 10000) {
+    partsCache.clear();
+  }
+  partsCache.set(ts, result);
+  return result;
 }
 
 /**
@@ -76,10 +90,17 @@ export function getWeekNumber(date) {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
+let cachedWeekBounds = null;
+let lastWeekBoundsCheck = 0;
+
 /**
  * Returns the exact start (Monday 00:00:00) and end (next Monday 00:00:00) of "This Week" in Swedish time.
  */
 export function getThisWeekBounds(nowMs = Date.now()) {
+  if (cachedWeekBounds && Math.abs(nowMs - lastWeekBoundsCheck) < 60000) {
+    return cachedWeekBounds;
+  }
+
   const p = getSwedishParts(nowMs);
   const daysSinceMonday = p.weekday - 1; // 0 for Mon, 6 for Sun
 
@@ -93,13 +114,23 @@ export function getThisWeekBounds(nowMs = Date.now()) {
   const nextMonParts = getSwedishParts(nextMondayDate.getTime());
   const end = getStockholmTimestamp(nextMonParts.year, nextMonParts.month, nextMonParts.day, 0, 0, 0);
 
-  return { start, end };
+  const bounds = { start, end };
+  cachedWeekBounds = bounds;
+  lastWeekBoundsCheck = nowMs;
+  return bounds;
 }
+
+let cachedMonthBounds = null;
+let lastMonthBoundsCheck = 0;
 
 /**
  * Returns the exact start (1st 00:00:00) and end (1st of next month 00:00:00) of "This Month" in Swedish time.
  */
 export function getThisMonthBounds(nowMs = Date.now()) {
+  if (cachedMonthBounds && Math.abs(nowMs - lastMonthBoundsCheck) < 60000) {
+    return cachedMonthBounds;
+  }
+
   const p = getSwedishParts(nowMs);
   const start = getStockholmTimestamp(p.year, p.month, 1, 0, 0, 0);
 
@@ -107,24 +138,27 @@ export function getThisMonthBounds(nowMs = Date.now()) {
   const nextYear = p.month === 12 ? p.year + 1 : p.year;
   const end = getStockholmTimestamp(nextYear, nextMonth, 1, 0, 0, 0);
 
-  return { start, end };
+  const bounds = { start, end };
+  cachedMonthBounds = bounds;
+  lastMonthBoundsCheck = nowMs;
+  return bounds;
 }
 
 /**
  * Checks if a match falls into the chosen time span ('this_week', 'this_month', 'all_time')
  */
-export function isMatchInTimeSpan(match, timeSpan, nowMs = Date.now()) {
+export function isMatchInTimeSpan(match, timeSpan, cachedBounds = null, nowMs = Date.now()) {
   if (!match || !match.timestamp) return false;
   if (timeSpan === 'all_time') return true;
 
   if (timeSpan === 'this_week' || timeSpan === '7_days') {
-    const { start, end } = getThisWeekBounds(nowMs);
-    return match.timestamp >= start && match.timestamp < end;
+    const bounds = cachedBounds || getThisWeekBounds(nowMs);
+    return match.timestamp >= bounds.start && match.timestamp < bounds.end;
   }
 
   if (timeSpan === 'this_month' || timeSpan === '30_days') {
-    const { start, end } = getThisMonthBounds(nowMs);
-    return match.timestamp >= start && match.timestamp < end;
+    const bounds = cachedBounds || getThisMonthBounds(nowMs);
+    return match.timestamp >= bounds.start && match.timestamp < bounds.end;
   }
 
   return true;
@@ -136,18 +170,21 @@ export function isMatchInTimeSpan(match, timeSpan, nowMs = Date.now()) {
  */
 export function isInOfficeMatch(match) {
   if (!match || !match.timestamp) return false;
-  const parts = getSwedishParts(match.timestamp);
-
-  const isWorkHours = parts.weekday >= 1 && parts.weekday <= 5 && parts.hour >= 7 && parts.hour < 18;
-  if (!isWorkHours) return false;
 
   if (!match.participantIds || !Array.isArray(match.participantIds)) return false;
 
-  const companyParticipants = match.participantIds.filter(
-    id => typeof id === 'string' && !id.startsWith('guest')
-  );
+  let nonGuestCount = 0;
+  for (let i = 0; i < match.participantIds.length; i++) {
+    const id = match.participantIds[i];
+    if (typeof id === 'string' && !id.startsWith('guest')) {
+      nonGuestCount++;
+      if (nonGuestCount > 1) break;
+    }
+  }
+  if (nonGuestCount < 2) return false;
 
-  return companyParticipants.length > 1;
+  const parts = getSwedishParts(match.timestamp);
+  return parts.weekday >= 1 && parts.weekday <= 5 && parts.hour >= 7 && parts.hour < 18;
 }
 
 /**

@@ -21,14 +21,13 @@ export default function Home({ players, matches }) {
   const [selectedWeekStart, setSelectedWeekStart] = useState(null);
 
   const leaderboard = useMemo(() => {
-    return players.map(p => {
-      let activeMatches = matches;
-      if (onlyInOffice) {
-        activeMatches = matches.filter(isInOfficeMatch);
-      }
-      
-      const timeFilteredMatches = activeMatches.filter(m => isMatchInTimeSpan(m, timeSpan));
+    const activeOfficeMatches = onlyInOffice ? matches.filter(isInOfficeMatch) : matches;
+    const bounds = (timeSpan === 'this_week' || timeSpan === '7_days') 
+      ? getThisWeekBounds() 
+      : (timeSpan === 'this_month' || timeSpan === '30_days' ? getThisMonthBounds() : null);
+    const timeFilteredMatches = activeOfficeMatches.filter(m => isMatchInTimeSpan(m, timeSpan, bounds));
 
+    return players.map(p => {
       const playerWinnerMatches = timeFilteredMatches.filter(m => m.winnerId === p.id);
       const filteredWins = playerWinnerMatches.length;
 
@@ -45,11 +44,9 @@ export default function Home({ players, matches }) {
       let bustCount = 0;
       let validThrows = 0;
       let totalThrowScore = 0;
-      
-      const pool = timeFilteredMatches;
 
-      pool.forEach(m => {
-        if (!m.turns) return;
+      timeFilteredMatches.forEach(m => {
+        if (!m.turns || !m.turns.length) return;
         const playerTurns = m.turns.filter(t => t.playerId === p.id);
         if (playerTurns.length === 0) return;
 
@@ -104,13 +101,7 @@ export default function Home({ players, matches }) {
 
   useEffect(() => {
     if (leaderboard.length > 0) {
-      setSelectedPlayerId(leaderboard[0].id);
-    }
-  }, [timeSpan, statType, onlyInOffice]);
-
-  useEffect(() => {
-    if (leaderboard.length > 0) {
-      if (!selectedPlayerId || !leaderboard.find(p => p.id === selectedPlayerId)) {
+      if (!selectedPlayerId || !leaderboard.some(p => p.id === selectedPlayerId)) {
         setSelectedPlayerId(leaderboard[0].id);
       }
     }
@@ -121,6 +112,12 @@ export default function Home({ players, matches }) {
     const data = [];
     const now = new Date();
     
+    const activeOfficeMatches = onlyInOffice ? matches.filter(isInOfficeMatch) : matches;
+    const playerMatches = activeOfficeMatches.filter(m => 
+      (m.participantIds && m.participantIds.includes(selectedPlayerId)) || 
+      m.winnerId === selectedPlayerId
+    );
+
     const periods = [];
     if (selectedWeekStart === null) {
       for (let i = 9; i >= 0; i--) {
@@ -148,16 +145,9 @@ export default function Home({ players, matches }) {
     }
 
     periods.forEach(period => {
-      let activeMatches = matches.filter(m => m.timestamp >= period.start && m.timestamp < period.end);
-      if (onlyInOffice) {
-        activeMatches = activeMatches.filter(isInOfficeMatch);
-      }
+      const activeMatches = playerMatches.filter(m => m.timestamp >= period.start && m.timestamp < period.end);
 
-      const gamesPlayed = activeMatches.filter(m => 
-        (m.participantIds && m.participantIds.includes(selectedPlayerId)) || 
-        m.winnerId === selectedPlayerId
-      ).length;
-
+      const gamesPlayed = activeMatches.length;
       const wins = activeMatches.filter(m => m.winnerId === selectedPlayerId).length;
       const win_rate = gamesPlayed > 0 ? (wins / gamesPlayed) * 100 : 0;
 
@@ -318,7 +308,15 @@ export default function Home({ players, matches }) {
                           isCrown ? 'border-amber-400' : isSelected ? 'border-[#00f0a8]' : 'border-white/10'
                         } bg-[#1a2336] flex items-center justify-center`}>
                           {player.pfpUrl ? (
-                            <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover" />
+                            <img 
+                              src={player.pfpUrl} 
+                              alt={player.name} 
+                              width="44" 
+                              height="44" 
+                              loading="lazy" 
+                              decoding="async" 
+                              className="w-full h-full object-cover" 
+                            />
                           ) : (
                             <span className="font-extrabold text-white text-xs uppercase">{player.name.substring(0, 2)}</span>
                           )}
@@ -377,7 +375,16 @@ export default function Home({ players, matches }) {
                     className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#00f0a8] shadow-[0_0_15px_rgba(0,240,168,0.3)] bg-[#1a2336] flex items-center justify-center cursor-pointer shrink-0"
                   >
                     {selectedPlayer.pfpUrl ? (
-                      <img src={selectedPlayer.pfpUrl} alt={selectedPlayer.name} className="w-full h-full object-cover" />
+                      <img 
+                        src={selectedPlayer.pfpUrl} 
+                        alt={selectedPlayer.name} 
+                        width="80" 
+                        height="80" 
+                        fetchPriority="high" 
+                        loading="eager" 
+                        decoding="async" 
+                        className="w-full h-full object-cover" 
+                      />
                     ) : (
                       <span className="font-black text-white text-2xl uppercase">{selectedPlayer.name.substring(0, 2)}</span>
                     )}

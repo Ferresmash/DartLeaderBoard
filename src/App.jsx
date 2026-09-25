@@ -15,9 +15,33 @@ import { getPlayers, getMatches } from './firebase/db';
 import { DartFlowLogoMark } from './components/DartFlowLogo';
 
 export default function App() {
-  const [players, setPlayers] = useState([]);
-  const [matches, setMatches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [players, setPlayers] = useState(() => {
+    try {
+      const cached = localStorage.getItem('darts_cached_players');
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [matches, setMatches] = useState(() => {
+    try {
+      const cached = localStorage.getItem('darts_cached_matches');
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cachedP = localStorage.getItem('darts_cached_players');
+      const cachedM = localStorage.getItem('darts_cached_matches');
+      return !(cachedP && cachedM);
+    } catch (e) {
+      return true;
+    }
+  });
 
   const fetchData = async () => {
     try {
@@ -25,6 +49,12 @@ export default function App() {
       const m = await getMatches();
       setPlayers(p);
       setMatches(m);
+      try {
+        localStorage.setItem('darts_cached_players', JSON.stringify(p));
+        localStorage.setItem('darts_cached_matches', JSON.stringify(m));
+      } catch (storageErr) {
+        console.warn("Storage quota or error caching data:", storageErr);
+      }
     } catch (e) {
       console.error("Error fetching data", e);
     } finally {
