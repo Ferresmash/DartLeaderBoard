@@ -8,6 +8,7 @@ import {
   isMatchInTimeSpan, 
   isInOfficeMatch, 
   getThisWeekBounds, 
+  getThisMonthBounds,
   getSwedishParts 
 } from '../utils/dateUtils';
 
