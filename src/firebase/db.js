@@ -90,14 +90,15 @@ export const addWin = async (playerId) => {
 };
 
 // Advanced Game Post-Match synchronizer
-export const submitMatchData = async (winnerId, participantIds, bestScores, turns = [], startingScore = 501) => {
+export const submitMatchData = async (winnerId, participantIds, bestScores, turns = [], startingScore = 501, gameMode = 'x01') => {
   const now = new Date();
   
   const matchData = {
     winnerId: winnerId,
     participantIds: participantIds,
     turns: turns,
-    startingScore: startingScore,
+    startingScore: gameMode === 'killer' ? 'Killer' : startingScore,
+    gameMode: gameMode,
     timestamp: now.getTime(),
     dateString: now.toISOString()
   };

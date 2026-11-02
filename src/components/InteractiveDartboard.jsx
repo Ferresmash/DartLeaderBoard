@@ -46,7 +46,11 @@ export default function InteractiveDartboard({
   onBust, 
   activePlayerName = 'Player',
   startingScore = 501,
-  currentScore = 501
+  currentScore = 501,
+  mode = 'x01',
+  sectorPlayerMap = null,
+  activePlayerSlices = [],
+  onDartRecorded = null
 }) {
   const [darts, setDarts] = useState([]); // array of { label, score, value, multiplier }
   const [zoomedSector, setZoomedSector] = useState(null); // null, number (1-20), or 'bull'
@@ -66,9 +70,14 @@ export default function InteractiveDartboard({
       else customLabel = `S${value}`;
     }
 
-    const newDarts = [...darts, { label: customLabel, score, value, multiplier }];
+    const recordedDart = { label: customLabel, score, value, multiplier };
+    const newDarts = [...darts, recordedDart];
     setDarts(newDarts);
     setZoomedSector(null); // reset zoom after registering dart
+
+    if (onDartRecorded) {
+      onDartRecorded(recordedDart);
+    }
   };
 
   const handleMiss = () => {
@@ -189,6 +198,9 @@ export default function InteractiveDartboard({
             const ringColor = isEven ? '#f43f5e' : '#00f0a8';
 
             const numPos = polarToCartesian(0, 0, 186, idx * 18);
+            const playerInfo = sectorPlayerMap ? sectorPlayerMap[num] : null;
+            const isOwn = activePlayerSlices.includes(num);
+            const numColor = playerInfo ? playerInfo.color : '#ffffff';
 
             return (
               <g key={num} id={`sector-${num}`}>
@@ -252,11 +264,23 @@ export default function InteractiveDartboard({
                   }}
                 />
 
+                {/* Killer Player Sector Accent Band */}
+                {playerInfo && (
+                  <path
+                    d={describeArcSegment(173, 178, startAngle, endAngle)}
+                    fill={playerInfo.color}
+                    opacity={playerInfo.isEliminated ? 0.25 : 0.95}
+                    stroke="#0a0e17"
+                    strokeWidth="0.5"
+                    className="pointer-events-none"
+                  />
+                )}
+
                 {/* Number Text on Outer Ring */}
                 <text
                   x={numPos.x}
                   y={numPos.y}
-                  fill="#ffffff"
+                  fill={numColor}
                   fontSize="15"
                   fontWeight="900"
                   textAnchor="middle"
@@ -265,6 +289,18 @@ export default function InteractiveDartboard({
                 >
                   {num}
                 </text>
+
+                {/* Player dot indicator */}
+                {playerInfo && (
+                  <circle
+                    cx={polarToCartesian(0, 0, 196, idx * 18).x}
+                    cy={polarToCartesian(0, 0, 196, idx * 18).y}
+                    r={isOwn ? "2.5" : "2"}
+                    fill={playerInfo.color}
+                    opacity={playerInfo.isEliminated ? 0.3 : 1}
+                    className="pointer-events-none"
+                  />
+                )}
               </g>
             );
           })}
@@ -308,16 +344,33 @@ export default function InteractiveDartboard({
         {zoomedSector && (
           <div className="absolute inset-x-2 bottom-2 bg-[#0a0e17]/95 border border-white/15 backdrop-blur-md rounded-2xl p-2.5 flex flex-col gap-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150 z-20">
             <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-black text-white flex items-center gap-1.5">
-                <Target className="w-3.5 h-3.5 text-[#00f0a8]" />
-                {zoomedSector === 'bull' ? 'Center Bull Area' : `Target Sector: ${zoomedSector}`}
-              </span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Target className="w-3.5 h-3.5 text-[#00f0a8] shrink-0" />
+                <span className="text-xs font-black text-white truncate">
+                  {zoomedSector === 'bull' ? 'Center Bull Area' : `Sector ${zoomedSector}`}
+                </span>
+                {mode === 'killer' && zoomedSector !== 'bull' && (
+                  <span 
+                    className="text-[9px] font-black px-1.5 py-0.5 rounded-md truncate max-w-[140px]"
+                    style={{
+                      backgroundColor: sectorPlayerMap?.[zoomedSector] ? `${sectorPlayerMap[zoomedSector].color}25` : 'rgba(255,255,255,0.08)',
+                      color: sectorPlayerMap?.[zoomedSector] ? sectorPlayerMap[zoomedSector].color : '#94a3b8'
+                    }}
+                  >
+                    {activePlayerSlices.includes(zoomedSector)
+                      ? '⭐ Your Sector'
+                      : sectorPlayerMap?.[zoomedSector]
+                        ? `🎯 ${sectorPlayerMap[zoomedSector].playerName}`
+                        : 'Neutral'}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => setZoomedSector(null)}
-                className="text-[10px] font-bold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+                className="text-[10px] font-bold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer shrink-0"
               >
                 <ZoomOut className="w-3 h-3" />
-                <span>Reset Zoom</span>
+                <span>Reset</span>
               </button>
             </div>
 
@@ -385,7 +438,7 @@ export default function InteractiveDartboard({
       </div>
 
       {/* Bottom Action Controls */}
-      <div className="grid grid-cols-4 gap-2 w-full mt-2">
+      <div className={`grid ${mode === 'killer' ? 'grid-cols-3' : 'grid-cols-4'} gap-2 w-full mt-2`}>
         <button
           onClick={handleUndoDart}
           disabled={darts.length === 0}
@@ -404,12 +457,14 @@ export default function InteractiveDartboard({
           <span>Miss (0)</span>
         </button>
 
-        <button
-          onClick={onBust}
-          className="py-3 bg-[#23151c] hover:bg-[#2e1924] text-rose-400 font-extrabold text-xs uppercase tracking-wider rounded-xl border border-rose-500/20 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-        >
-          Bust
-        </button>
+        {mode !== 'killer' && (
+          <button
+            onClick={onBust}
+            className="py-3 bg-[#23151c] hover:bg-[#2e1924] text-rose-400 font-extrabold text-xs uppercase tracking-wider rounded-xl border border-rose-500/20 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+          >
+            Bust
+          </button>
+        )}
 
         <button
           onClick={() => {

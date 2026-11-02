@@ -1,7 +1,18 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { Play, ChevronLeft, ChevronRight, Users, Shield, Target, UserCheck } from 'lucide-react';
+import { 
+  Play, ChevronLeft, ChevronRight, Users, Shield, Target, 
+  Skull, Flame, AlertTriangle, Dices, Check, Heart
+} from 'lucide-react';
 import DartFlowHeader from '../../components/DartFlowHeader';
+import { 
+  PLAYER_THEMES,
+  KILLER_DIFFICULTIES,
+  isBoardOverfilled,
+  getMaxPlayersForSlices,
+  assignRandomAdjacentSlices,
+  TOTAL_SECTORS
+} from '../../utils/killerUtils';
 
 const PLAYER_COLORS = [
   { border: 'border-[#00f0a8]', glow: 'shadow-[0_0_15px_rgba(0,240,168,0.3)]', text: 'text-[#00f0a8]', bg: 'bg-[#00f0a8]/10', name: 'Teal' },
@@ -15,24 +26,69 @@ export default function Setup() {
   const navigate = useNavigate();
   const selectedPlayers = location.state?.selectedPlayers;
 
+  // Game Mode: 'x01' or 'killer'
+  const [gameMode, setGameMode] = useState('x01');
+
+  // X01 Mode settings
   const [mode, setMode] = useState('501'); // 301, 501, 701, custom
   const [customScore, setCustomScore] = useState(301);
   const [legs, setLegs] = useState(1);
-  const [playerMode, setPlayerMode] = useState('ffa'); // 'ffa', 'teams', 'solo'
+  const [playerMode, setPlayerMode] = useState('ffa'); // 'ffa', 'teams'
   const [outRule, setOutRule] = useState('straight'); // 'straight', 'double', 'master'
+
+  // Killer Mode settings - Default is Hard (1 Number)
+  const [killerDifficulty, setKillerDifficulty] = useState('hard');
+  const [multipliersCount, setMultipliersCount] = useState(true);
+  const [randomSeed, setRandomSeed] = useState(0);
 
   if (!selectedPlayers || selectedPlayers.length === 0) {
     return <Navigate to="/game" />;
   }
 
   const isFourPlayers = selectedPlayers.length === 4;
+  const currentDiffObj = KILLER_DIFFICULTIES.find(d => d.id === killerDifficulty) || KILLER_DIFFICULTIES[0];
+  const slicesPerPlayer = currentDiffObj.slices;
+
+  // Killer board capacity checks
+  const totalSlicesNeeded = selectedPlayers.length * slicesPerPlayer;
+  const isOverfilled = isBoardOverfilled(selectedPlayers.length, slicesPerPlayer);
+  const maxAllowedForCurrent = getMaxPlayersForSlices(slicesPerPlayer);
+
+  // Computed random slice assignments (adjacent for each player, scattered across the board)
+  const playerSliceAssignments = useMemo(() => {
+    return assignRandomAdjacentSlices(selectedPlayers, slicesPerPlayer);
+  }, [selectedPlayers, slicesPerPlayer, randomSeed]);
+
+  const handleRerollSlices = () => {
+    setRandomSeed(s => s + 1);
+  };
 
   const handleStart = () => {
-    const startingScore = mode === 'custom' ? parseInt(customScore) || 301 : parseInt(mode);
     const shuffledPlayers = [...selectedPlayers].sort(() => Math.random() - 0.5);
 
+    if (gameMode === 'killer') {
+      if (isOverfilled) return;
+      // Pass the randomized slice assignments to the match
+      navigate('/game/play', {
+        state: {
+          gameMode: 'killer',
+          selectedPlayers: shuffledPlayers,
+          killerConfig: {
+            difficulty: killerDifficulty,
+            slicesPerPlayer,
+            multipliersCount,
+            playerSlices: playerSliceAssignments
+          }
+        }
+      });
+      return;
+    }
+
+    // Classic X01
+    const startingScore = mode === 'custom' ? parseInt(customScore) || 301 : parseInt(mode);
     navigate('/game/play', { 
       state: { 
+        gameMode: 'x01',
         selectedPlayers: shuffledPlayers, 
         startingScore, 
         legsToWin: legs,
@@ -52,11 +108,55 @@ export default function Setup() {
         <div className="flex flex-col gap-6">
           {/* Screen Title */}
           <div className="text-center">
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">New Match</h1>
-            <p className="text-slate-400 text-xs mt-1 font-medium">Configure match rules & player order</p>
+            <h1 className="text-3xl font-extrabold text-white tracking-tight">Match Setup</h1>
+            <p className="text-slate-400 text-xs mt-1 font-medium">Choose game mode & configure rules</p>
           </div>
 
-          {/* Players Section */}
+          {/* Game Mode Selector (Classic X01 vs Killer) */}
+          <div className="flex flex-col gap-2">
+            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider pl-1">
+              Select Game Mode
+            </span>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setGameMode('x01')}
+                className={`p-3.5 rounded-2xl flex flex-col items-center text-center border-2 transition-all cursor-pointer ${
+                  gameMode === 'x01'
+                    ? 'bg-[#122421] border-[#00f0a8] shadow-[0_0_20px_rgba(0,240,168,0.25)]'
+                    : 'bg-[#131b2a] border-white/10 hover:border-white/20 opacity-70 hover:opacity-100'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-xl mb-2 flex items-center justify-center ${
+                  gameMode === 'x01' ? 'bg-[#00f0a8] text-[#0a0e17]' : 'bg-white/5 text-slate-400'
+                }`}>
+                  <Target className="w-5 h-5" />
+                </div>
+                <span className="font-black text-sm text-white">Classic X01</span>
+                <span className="text-[10px] text-slate-400 mt-0.5">301 / 501 / 701</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setGameMode('killer')}
+                className={`p-3.5 rounded-2xl flex flex-col items-center text-center border-2 transition-all cursor-pointer ${
+                  gameMode === 'killer'
+                    ? 'bg-[#291018] border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.3)]'
+                    : 'bg-[#131b2a] border-white/10 hover:border-white/20 opacity-70 hover:opacity-100'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-xl mb-2 flex items-center justify-center ${
+                  gameMode === 'killer' ? 'bg-rose-500 text-white' : 'bg-white/5 text-slate-400'
+                }`}>
+                  <Skull className="w-5 h-5" />
+                </div>
+                <span className="font-black text-sm text-white">Killer</span>
+                <span className="text-[10px] text-rose-300/80 mt-0.5">Hearts & Survival</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Players Overview Section */}
           <div className="flex flex-col gap-2.5">
             <div className="flex justify-between items-center pl-1">
               <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Players</span>
@@ -65,179 +165,350 @@ export default function Setup() {
               </span>
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {selectedPlayers.map((player, idx) => {
-                // If in 2v2 Teams mode, group team 1 (idx 0, 2) in Teal and team 2 (idx 1, 3) in Purple
-                const colorIdx = playerMode === 'teams' && isFourPlayers ? (idx % 2 === 0 ? 0 : 1) : idx % PLAYER_COLORS.length;
+                const colorIdx = gameMode === 'x01' && playerMode === 'teams' && isFourPlayers 
+                  ? (idx % 2 === 0 ? 0 : 1) 
+                  : idx % PLAYER_COLORS.length;
                 const color = PLAYER_COLORS[colorIdx];
-                const teamLabel = playerMode === 'teams' && isFourPlayers ? (idx % 2 === 0 ? 'Team A' : 'Team B') : `Player ${idx + 1}`;
+                const teamLabel = gameMode === 'x01' && playerMode === 'teams' && isFourPlayers 
+                  ? (idx % 2 === 0 ? 'Team A' : 'Team B') 
+                  : `Player ${idx + 1}`;
+                const assignedSlices = playerSliceAssignments[player.id || idx] || [];
 
                 return (
                   <div 
                     key={player.id || idx}
                     className={`bg-[#131b2a] rounded-2xl p-3 flex flex-col items-center justify-center border-2 transition-all ${color.border} ${color.glow}`}
                   >
-                    <div className="w-16 h-16 rounded-full overflow-hidden mb-2 relative border-2 border-white/10 bg-[#1b2437] flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-full overflow-hidden mb-1.5 relative border-2 border-white/10 bg-[#1b2437] flex items-center justify-center">
                       {player.pfpUrl ? (
                         <img src={player.pfpUrl} alt={player.name} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="font-extrabold text-white text-lg uppercase">
+                        <span className="font-extrabold text-white text-base uppercase">
                           {player.name ? player.name.substring(0, 2) : 'PL'}
                         </span>
                       )}
                     </div>
-                    <span className="font-bold text-white text-sm tracking-tight truncate max-w-[120px]">
+                    <span className="font-bold text-white text-xs tracking-tight truncate max-w-[120px]">
                       {player.name}
                     </span>
-                    <span className={`text-[10px] font-extrabold uppercase mt-0.5 ${color.text}`}>
-                      {teamLabel}
-                    </span>
+
+                    {gameMode === 'killer' ? (
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-[9px] font-extrabold text-slate-400 uppercase">Slices:</span>
+                        <div className="flex gap-0.5">
+                          {assignedSlices.map(s => (
+                            <span 
+                              key={s} 
+                              className="text-[9px] font-black px-1.5 py-0.2 rounded bg-white/10 text-[#00f0a8]"
+                            >
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className={`text-[10px] font-extrabold uppercase mt-0.5 ${color.text}`}>
+                        {teamLabel}
+                      </span>
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* Select Game / Starting Score */}
-          <div className="flex flex-col gap-2.5">
-            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider pl-1">Starting Score</span>
-            <div className="grid grid-cols-4 gap-2 bg-[#131b2a] p-1.5 rounded-2xl border border-white/[0.08]">
-              {modeOptions.map(opt => (
+          {/* KILLER CONFIGURATION */}
+          {gameMode === 'killer' ? (
+            <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-top-2">
+              
+              {/* Difficulty: 3 numbers, 2 numbers, 1 number */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between pl-1">
+                  <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                    Difficulty (Slices Per Player)
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    Adjacent numbers on board
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {KILLER_DIFFICULTIES.map(diff => {
+                    const isSelected = killerDifficulty === diff.id;
+                    const diffOverfilled = isBoardOverfilled(selectedPlayers.length, diff.slices);
+                    const maxP = getMaxPlayersForSlices(diff.slices);
+
+                    return (
+                      <button
+                        key={diff.id}
+                        type="button"
+                        onClick={() => {
+                          if (!diffOverfilled) setKillerDifficulty(diff.id);
+                        }}
+                        disabled={diffOverfilled}
+                        className={`p-3 rounded-2xl flex flex-col items-center text-center border-2 transition-all relative ${
+                          diffOverfilled
+                            ? 'bg-[#10141e]/50 border-white/5 opacity-40 cursor-not-allowed text-slate-500'
+                            : isSelected
+                              ? 'bg-rose-500/15 border-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.3)] cursor-pointer'
+                              : 'bg-[#131b2a] border-white/10 text-slate-300 hover:border-white/20 hover:text-white cursor-pointer'
+                        }`}
+                      >
+                        <span className="text-xs font-black uppercase tracking-wider">{diff.name}</span>
+                        <span className="text-[11px] font-bold text-rose-400 mt-0.5">{diff.badge}</span>
+                        <span className="text-[9px] text-slate-400 mt-1">
+                          {diffOverfilled ? `Max ${maxP} Pl.` : `≤ ${maxP} Players`}
+                        </span>
+                        {isSelected && !diffOverfilled && (
+                          <div className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Board Capacity Indicator & Overfill Check Warning */}
+              <div className={`p-3.5 rounded-2xl border transition-all ${
+                isOverfilled 
+                  ? 'bg-rose-500/15 border-rose-500 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]' 
+                  : 'bg-[#131b2a] border-white/10 text-slate-300'
+              }`}>
+                <div className="flex items-center justify-between text-xs font-bold mb-1.5">
+                  <span className="flex items-center gap-1.5">
+                    {isOverfilled ? <AlertTriangle className="w-4 h-4 text-rose-400" /> : <Shield className="w-4 h-4 text-[#00f0a8]" />}
+                    <span>Board Slice Capacity</span>
+                  </span>
+                  <span className={isOverfilled ? "text-rose-400 font-black" : "text-[#00f0a8] font-black"}>
+                    {totalSlicesNeeded} / {TOTAL_SECTORS} Slices
+                  </span>
+                </div>
+
+                <div className="w-full bg-[#0a0e17] h-2 rounded-full overflow-hidden border border-white/5 mb-2">
+                  <div 
+                    className={`h-full rounded-full transition-all ${
+                      isOverfilled ? 'bg-rose-500' : 'bg-[#00f0a8]'
+                    }`}
+                    style={{ width: `${Math.min(100, (totalSlicesNeeded / TOTAL_SECTORS) * 100)}%` }}
+                  />
+                </div>
+
+                {isOverfilled ? (
+                  <p className="text-[11px] text-rose-300 leading-snug font-medium">
+                    ⚠️ <strong>Board Overfilled!</strong> {selectedPlayers.length} players with {slicesPerPlayer} slices each requires {totalSlicesNeeded} slices, but a dartboard only has 20 slices. Please select Medium (2) or Hard (1) difficulty.
+                  </p>
+                ) : (
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>{selectedPlayers.length} players × {slicesPerPlayer} numbers each</span>
+                    <button
+                      type="button"
+                      onClick={handleRerollSlices}
+                      className="text-[10px] font-bold text-[#00f0a8] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Dices className="w-3.5 h-3.5" />
+                      <span>Re-roll Slices</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Multipliers Option (Doubles/Triples count for 2/3 hearts) */}
+              <div className="bg-[#131b2a] border border-white/10 rounded-2xl p-3.5 flex items-center justify-between">
+                <div className="flex flex-col pr-3">
+                  <span className="text-white font-bold text-xs">Multipliers Count</span>
+                  <span className="text-slate-400 text-[11px] mt-0.5">
+                    Doubles = 2 hearts, Triples = 3 hearts (Recommended)
+                  </span>
+                </div>
                 <button
-                  key={opt}
-                  onClick={() => setMode(opt)}
-                  className={`py-3 rounded-xl font-black text-sm tracking-wide transition-all cursor-pointer ${
-                    mode === opt 
-                      ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_15px_rgba(0,240,168,0.4)]' 
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                  type="button"
+                  onClick={() => setMultipliersCount(!multipliersCount)}
+                  className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
+                    multipliersCount ? 'bg-[#00f0a8]' : 'bg-slate-700'
                   }`}
                 >
-                  {opt === 'custom' ? 'Custom' : opt}
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform transform absolute top-0.5 ${
+                    multipliersCount ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
                 </button>
-              ))}
-            </div>
-
-            {mode === 'custom' && (
-              <div className="bg-[#131b2a] border border-white/10 rounded-2xl p-4 animate-in fade-in slide-in-from-top-2">
-                <label className="text-slate-400 text-xs font-bold uppercase tracking-wider block mb-2 text-center">Custom Starting Score</label>
-                <input 
-                  type="number" 
-                  value={customScore} 
-                  onChange={e => setCustomScore(e.target.value)}
-                  className="w-full bg-[#0a0e17] border border-white/15 rounded-xl py-3 px-4 text-white text-3xl font-black text-center focus:outline-none focus:border-[#00f0a8] transition-colors"
-                />
               </div>
-            )}
-          </div>
 
-          {/* Player Mode Interactive Selector */}
-          <div className="flex flex-col gap-2.5">
-            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider pl-1">Player Mode</span>
-            <div className="grid grid-cols-2 gap-2 bg-[#131b2a] p-1.5 rounded-2xl border border-white/[0.08]">
-              <button
-                onClick={() => setPlayerMode('ffa')}
-                className={`py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 font-bold text-xs transition-all cursor-pointer ${
-                  playerMode === 'ffa'
-                    ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>Free For All (PvP)</span>
-              </button>
+              {/* Killer Rules Summary Card */}
+              <div className="bg-[#0e1420] border border-white/5 rounded-2xl p-3 text-xs text-slate-400 space-y-1">
+                <div className="font-extrabold text-white text-[11px] uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Killer Rules Quick Reference</span>
+                </div>
+                <p>• Everyone starts at <strong>0 hearts</strong>.</p>
+                <p>• Hit your own slice(s) to earn hearts up to <strong>3 hearts</strong>.</p>
+                <p>• At 3 hearts, you become a <strong>Killer</strong>. On your future turns, you can attack rivals!</p>
+                <p>• When a player at 0 hearts is hit by a Killer, they are <strong>Eliminated</strong>. Last player standing wins!</p>
+              </div>
 
-              <button
-                onClick={() => {
-                  if (isFourPlayers) setPlayerMode('teams');
-                }}
-                disabled={!isFourPlayers}
-                className={`py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 font-bold text-xs transition-all ${
-                  !isFourPlayers ? 'opacity-35 cursor-not-allowed text-slate-500' :
-                  playerMode === 'teams'
-                    ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)] cursor-pointer'
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04] cursor-pointer'
-                }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span>2v2 Teams {isFourPlayers ? '' : '(4 Players)'}</span>
-              </button>
             </div>
-          </div>
+          ) : (
+            /* CLASSIC X01 CONFIGURATION */
+            <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-top-2">
+              {/* Select Game / Starting Score */}
+              <div className="flex flex-col gap-2.5">
+                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider pl-1">Starting Score</span>
+                <div className="grid grid-cols-4 gap-2 bg-[#131b2a] p-1.5 rounded-2xl border border-white/[0.08]">
+                  {modeOptions.map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setMode(opt)}
+                      className={`py-3 rounded-xl font-black text-sm tracking-wide transition-all cursor-pointer ${
+                        mode === opt 
+                          ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_15px_rgba(0,240,168,0.4)]' 
+                          : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      {opt === 'custom' ? 'Custom' : opt}
+                    </button>
+                  ))}
+                </div>
 
-          {/* Out Rule Selector */}
-          <div className="flex flex-col gap-2.5">
-            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider pl-1">Finish Rule (Out Mode)</span>
-            <div className="grid grid-cols-3 gap-2 bg-[#131b2a] p-1.5 rounded-2xl border border-white/[0.08]">
-              <button
-                onClick={() => setOutRule('straight')}
-                className={`py-2.5 px-2 rounded-xl text-center font-bold text-xs transition-all cursor-pointer ${
-                  outRule === 'straight'
-                    ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-                }`}
-              >
-                Straight Out
-              </button>
-              <button
-                onClick={() => setOutRule('double')}
-                className={`py-2.5 px-2 rounded-xl text-center font-bold text-xs transition-all cursor-pointer ${
-                  outRule === 'double'
-                    ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-                }`}
-              >
-                Double Out
-              </button>
-              <button
-                onClick={() => setOutRule('master')}
-                className={`py-2.5 px-2 rounded-xl text-center font-bold text-xs transition-all cursor-pointer ${
-                  outRule === 'master'
-                    ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-                }`}
-              >
-                Master Out
-              </button>
-            </div>
-          </div>
+                {mode === 'custom' && (
+                  <div className="bg-[#131b2a] border border-white/10 rounded-2xl p-4 animate-in fade-in slide-in-from-top-2">
+                    <label className="text-slate-400 text-xs font-bold uppercase tracking-wider block mb-2 text-center">Custom Starting Score</label>
+                    <input 
+                      type="number" 
+                      value={customScore} 
+                      onChange={e => setCustomScore(e.target.value)}
+                      className="w-full bg-[#0a0e17] border border-white/15 rounded-xl py-3 px-4 text-white text-3xl font-black text-center focus:outline-none focus:border-[#00f0a8] transition-colors"
+                    />
+                  </div>
+                )}
+              </div>
 
-          {/* Legs to Win Section */}
-          <div className="bg-[#131b2a] rounded-2xl p-4 border border-white/[0.08] flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-white font-bold text-sm">Legs to Win</span>
-              <span className="text-slate-400 text-xs">First to reach target</span>
+              {/* Player Mode Interactive Selector */}
+              <div className="flex flex-col gap-2.5">
+                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider pl-1">Player Mode</span>
+                <div className="grid grid-cols-2 gap-2 bg-[#131b2a] p-1.5 rounded-2xl border border-white/[0.08]">
+                  <button
+                    onClick={() => setPlayerMode('ffa')}
+                    className={`py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 font-bold text-xs transition-all cursor-pointer ${
+                      playerMode === 'ffa'
+                        ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]'
+                        : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Free For All (PvP)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (isFourPlayers) setPlayerMode('teams');
+                    }}
+                    disabled={!isFourPlayers}
+                    className={`py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 font-bold text-xs transition-all ${
+                      !isFourPlayers ? 'opacity-35 cursor-not-allowed text-slate-500' :
+                      playerMode === 'teams'
+                        ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)] cursor-pointer'
+                        : 'text-slate-400 hover:text-white hover:bg-white/[0.04] cursor-pointer'
+                    }`}
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span>2v2 Teams {isFourPlayers ? '' : '(4 Players)'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Out Rule Selector */}
+              <div className="flex flex-col gap-2.5">
+                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider pl-1">Finish Rule (Out Mode)</span>
+                <div className="grid grid-cols-3 gap-2 bg-[#131b2a] p-1.5 rounded-2xl border border-white/[0.08]">
+                  <button
+                    onClick={() => setOutRule('straight')}
+                    className={`py-2.5 px-2 rounded-xl text-center font-bold text-xs transition-all cursor-pointer ${
+                      outRule === 'straight'
+                        ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]'
+                        : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    Straight Out
+                  </button>
+                  <button
+                    onClick={() => setOutRule('double')}
+                    className={`py-2.5 px-2 rounded-xl text-center font-bold text-xs transition-all cursor-pointer ${
+                      outRule === 'double'
+                        ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]'
+                        : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    Double Out
+                  </button>
+                  <button
+                    onClick={() => setOutRule('master')}
+                    className={`py-2.5 px-2 rounded-xl text-center font-bold text-xs transition-all cursor-pointer ${
+                      outRule === 'master'
+                        ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]'
+                        : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    Master Out
+                  </button>
+                </div>
+              </div>
+
+              {/* Legs to Win Section */}
+              <div className="bg-[#131b2a] rounded-2xl p-4 border border-white/[0.08] flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-white font-bold text-sm">Legs to Win</span>
+                  <span className="text-slate-400 text-xs">First to reach target</span>
+                </div>
+                <div className="flex items-center gap-3 bg-[#0a0e17] p-1 rounded-xl border border-white/10">
+                  <button 
+                    onClick={() => setLegs(l => Math.max(1, l - 1))}
+                    className="w-9 h-9 rounded-lg bg-[#161f30] hover:bg-[#1f2b42] text-slate-200 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="w-8 text-center font-black text-white text-lg">{legs}</span>
+                  <button 
+                    onClick={() => setLegs(l => Math.min(21, l + 1))}
+                    className="w-9 h-9 rounded-lg bg-[#161f30] hover:bg-[#1f2b42] text-slate-200 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-3 bg-[#0a0e17] p-1 rounded-xl border border-white/10">
-              <button 
-                onClick={() => setLegs(l => Math.max(1, l - 1))}
-                className="w-9 h-9 rounded-lg bg-[#161f30] hover:bg-[#1f2b42] text-slate-200 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <span className="w-8 text-center font-black text-white text-lg">{legs}</span>
-              <button 
-                onClick={() => setLegs(l => Math.min(21, l + 1))}
-                className="w-9 h-9 rounded-lg bg-[#161f30] hover:bg-[#1f2b42] text-slate-200 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Start Game Action Button */}
         <div className="pt-6">
           <button
             onClick={handleStart}
-            className="w-full flex items-center justify-center gap-2 bg-[#00f0a8] hover:bg-[#00d694] text-[#0a0e17] font-black py-4 rounded-2xl shadow-[0_0_25px_rgba(0,240,168,0.4)] transition-all active:scale-[0.98] text-lg tracking-wide uppercase cursor-pointer"
+            disabled={gameMode === 'killer' && isOverfilled}
+            className={`w-full flex items-center justify-center gap-2 font-black py-4 rounded-2xl shadow-xl transition-all active:scale-[0.98] text-lg tracking-wide uppercase cursor-pointer ${
+              gameMode === 'killer' && isOverfilled
+                ? 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none border border-white/5'
+                : gameMode === 'killer'
+                  ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-[0_0_25px_rgba(244,63,94,0.4)]'
+                  : 'bg-[#00f0a8] hover:bg-[#00d694] text-[#0a0e17] shadow-[0_0_25px_rgba(0,240,168,0.4)]'
+            }`}
           >
-            <Play className="w-5 h-5 fill-current" />
-            <span>Start Game</span>
+            {gameMode === 'killer' ? (
+              <>
+                <Skull className="w-5 h-5 fill-current" />
+                <span>{isOverfilled ? 'Overfilled - Lower Slices' : 'Start Killer Match'}</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-5 h-5 fill-current" />
+                <span>Start Game</span>
+              </>
+            )}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
-

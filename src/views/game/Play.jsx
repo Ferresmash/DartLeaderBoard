@@ -5,6 +5,7 @@ import { Check, Delete, RotateCcw, Settings, Trophy, AlertTriangle, Target, Slid
 import { getCheckout } from '../../utils/checkouts';
 import DartFlowHeader from '../../components/DartFlowHeader';
 import InteractiveDartboard from '../../components/InteractiveDartboard';
+import KillerPlay from './KillerPlay';
 import clsx from 'clsx';
 
 const PLAYER_THEMES = [
@@ -109,6 +110,14 @@ const getNextActiveIdx = (currentIdx, isSD, sdPlayers, totalLen) => {
 export default function Play({ onMatchComplete }) {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const isKillerMode = 
+    location.state?.gameMode === 'killer' || 
+    (!location.state?.gameMode && !!localStorage.getItem('activeKillerGame') && !localStorage.getItem('activeDartsGame'));
+
+  if (isKillerMode) {
+    return <KillerPlay onMatchComplete={onMatchComplete} />;
+  }
   
   const savedGameStr = localStorage.getItem('activeDartsGame');
   const savedGame = savedGameStr ? JSON.parse(savedGameStr) : null;

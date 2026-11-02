@@ -45,11 +45,15 @@ export default function MatchesList({ matches, players }) {
                     <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
                       {formatDistanceToNow(match.timestamp, { addSuffix: true })}
                     </span>
-                    {match.startingScore && (
+                    {match.gameMode === 'killer' || match.startingScore === 'Killer' ? (
+                      <span className="bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-md text-[10px] font-black border border-rose-500/30 flex items-center gap-1">
+                        KILLER
+                      </span>
+                    ) : match.startingScore ? (
                       <span className="bg-[#0a0e17] px-2 py-0.5 rounded-md text-[10px] font-black text-[#00f0a8] border border-white/5">
                         {match.startingScore}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <h3 className="font-extrabold text-base text-white truncate flex items-center gap-2">
                     Winner: <span className="text-[#00f0a8]">{winnerName || 'Unknown'}</span>

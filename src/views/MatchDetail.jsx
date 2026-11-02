@@ -14,7 +14,7 @@ export default function MatchDetail({ matches, players }) {
   if (!match) return <Navigate to="/matches" />;
 
   const { chartData, participantList, playerStats, highestScore, highestScorer, winner } = useMemo(() => {
-    const startingScore = match.startingScore || 501;
+    const startingScore = typeof match.startingScore === 'number' ? match.startingScore : parseInt(match.startingScore) || 501;
     const pIds = match.participantIds || [];
     
     if (pIds.length === 0 && match.turns) {
