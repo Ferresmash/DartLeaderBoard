@@ -357,7 +357,7 @@ function X01Play({ onMatchComplete }) {
             const checkoutGuide = getCheckout(p.currentScore);
 
             return (
-              <div key={p.id || i} onClick={() => setActiveIdx(i)} className={clsx("relative rounded-2xl p-3 flex flex-col justify-between border-2 transition-all duration-300 cursor-pointer overflow-hidden", isActive ? `${theme.border} ${theme.cardBgActive} ${theme.activeGlow} scale-[1.02] z-10` : `${theme.borderInactive} ${theme.cardBgInactive} opacity-75 hover:opacity-100`)}>
+              <div key={p.id || i} onClick={() => setActiveIdx(i)} className={clsx("relative rounded-2xl p-3 flex flex-col justify-between border-2 transition-colors duration-150 cursor-pointer overflow-hidden", isActive ? `${theme.border} ${theme.cardBgActive} ${theme.activeGlow} z-10 ring-1 ring-white/10` : `${theme.borderInactive} ${theme.cardBgInactive} opacity-75 hover:opacity-100`)}>
                 {isActive && <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: theme.accentHex }} />}
                 <div className="flex items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
@@ -365,9 +365,15 @@ function X01Play({ onMatchComplete }) {
                         <span className="font-extrabold text-white text-xs truncate">{p?.name ? p.name.split(' ')[0] : 'Player'}</span>
                     </div>
                 </div>
-                <div className="flex flex-col items-center justify-center my-auto py-1">
+                <div className="flex flex-col items-center justify-center my-auto py-0.5">
                     <span className={clsx("font-black tracking-tight leading-none", inputMethod === 'dartboard' ? "text-3xl" : "text-5xl md:text-6xl", isActive ? "text-white" : "text-slate-300")}>{p.currentScore}</span>
-                    {checkoutGuide && <span className="text-[10px] font-bold text-[#00f0a8] mt-1">{checkoutGuide}</span>}
+                    <div className="h-4 flex items-center justify-center mt-1">
+                      {checkoutGuide ? (
+                        <span className="text-[10px] font-bold text-[#00f0a8] leading-none">{checkoutGuide}</span>
+                      ) : (
+                        <span className="text-[10px] text-transparent select-none leading-none">-</span>
+                      )}
+                    </div>
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[10px] font-semibold">
                   <span className="text-slate-400">avg.</span>
@@ -392,27 +398,25 @@ function X01Play({ onMatchComplete }) {
         ) : (
           <div className="flex flex-col w-full max-w-md mx-auto shrink-0 pb-1">
             {/* Input display bar with Target icon, current typed score, Backspace and Check buttons */}
-            <div className="mb-2 bg-[#121927] border border-white/10 rounded-2xl p-2 md:p-2.5 flex items-center justify-between shadow-inner relative h-13 md:h-15 shrink-0">
-              <div className="w-9 flex items-center justify-center text-slate-500">
+            <div className="mb-2 bg-[#121927] border border-white/10 rounded-2xl px-3 py-1.5 flex items-center justify-between shadow-inner relative h-14 shrink-0">
+              <div className="w-9 flex items-center justify-center text-slate-500 shrink-0">
                 <Target className="w-5 h-5 text-slate-400" />
               </div>
 
-              <div className="flex-1 flex flex-col justify-center items-center px-2 overflow-hidden">
-                <span className="text-2xl md:text-3xl font-black text-white tracking-wider leading-tight truncate">
+              <div className="flex-1 flex flex-col justify-center items-center px-2 min-w-0 h-full">
+                <span className="text-2xl font-black text-white tracking-wider leading-none truncate">
                   {inputVal || '-'}
                 </span>
-                {inputVal.includes('+') && (
-                  <span className="text-[#00f0a8] font-bold text-[11px] md:text-xs uppercase tracking-wider">
-                    Total: {currentCalculatedTotal}
-                  </span>
-                )}
+                <span className={clsx("text-[#00f0a8] font-bold text-[10px] uppercase tracking-wider leading-none mt-1 h-3 transition-opacity duration-100", inputVal.includes('+') ? "opacity-100" : "opacity-0 select-none")}>
+                  Total: {currentCalculatedTotal}
+                </span>
               </div>
 
-              <div className="flex items-center gap-1.5 h-full">
+              <div className="flex items-center gap-1.5 h-full shrink-0">
                 <button 
                   onClick={handleBackspace} 
                   disabled={!inputVal} 
-                  className="h-full px-3 md:px-4 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-20 text-rose-400 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                  className="h-full px-3 md:px-4 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 disabled:opacity-20 text-rose-400 flex items-center justify-center active:scale-[0.97] transition-colors duration-75 cursor-pointer touch-manipulation select-none"
                   title="Backspace"
                 >
                   <Delete className="w-5 h-5" />
@@ -420,7 +424,7 @@ function X01Play({ onMatchComplete }) {
                 <button 
                   onClick={submitScore} 
                   disabled={!inputVal} 
-                  className="h-full px-3 md:px-5 rounded-xl bg-[#00f0a8] hover:bg-[#00f0a8]/90 text-[#0a0e17] font-black flex items-center justify-center disabled:opacity-20 shadow-lg shadow-[#00f0a8]/20 active:scale-95 transition-all cursor-pointer"
+                  className="h-full px-3 md:px-5 rounded-xl bg-[#00f0a8] hover:bg-[#00f0a8]/90 active:bg-[#00d694] text-[#0a0e17] font-black flex items-center justify-center disabled:opacity-20 shadow-lg shadow-[#00f0a8]/20 active:scale-[0.97] transition-colors duration-75 cursor-pointer touch-manipulation select-none"
                   title="Submit Score"
                 >
                   <Check className="w-6 h-6 stroke-[3]" />
@@ -434,7 +438,7 @@ function X01Play({ onMatchComplete }) {
                 <button 
                   key={num} 
                   onClick={() => handleKeypad(num.toString())}
-                  className="h-12 md:h-14 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer"
+                  className="h-12 md:h-14 bg-[#162030] hover:bg-[#1f2b42] active:bg-[#23324c] text-white font-black text-2xl rounded-2xl active:scale-[0.98] transition-colors duration-75 shadow-md border border-white/5 flex items-center justify-center cursor-pointer touch-manipulation select-none"
                 >
                   {num}
                 </button>
@@ -442,19 +446,19 @@ function X01Play({ onMatchComplete }) {
               <button 
                 onClick={handleExplicitBust}
                 disabled={isSuddenDeath}
-                className="h-12 md:h-14 bg-rose-500/15 hover:bg-rose-500/25 disabled:opacity-25 disabled:cursor-not-allowed text-rose-400 font-extrabold text-base rounded-2xl active:scale-95 transition-all shadow-md border border-rose-500/25 flex items-center justify-center uppercase tracking-wider cursor-pointer"
+                className="h-12 md:h-14 bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 disabled:opacity-25 disabled:cursor-not-allowed text-rose-400 font-extrabold text-base rounded-2xl active:scale-[0.98] transition-colors duration-75 shadow-md border border-rose-500/25 flex items-center justify-center uppercase tracking-wider cursor-pointer touch-manipulation select-none"
               >
                 Bust
               </button>
               <button 
                 onClick={() => handleKeypad('0')}
-                className="h-12 md:h-14 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer"
+                className="h-12 md:h-14 bg-[#162030] hover:bg-[#1f2b42] active:bg-[#23324c] text-white font-black text-2xl rounded-2xl active:scale-[0.98] transition-colors duration-75 shadow-md border border-white/5 flex items-center justify-center cursor-pointer touch-manipulation select-none"
               >
                 0
               </button>
               <button 
                 onClick={() => handleKeypad('+')}
-                className="h-12 md:h-14 bg-[#00f0a8]/15 hover:bg-[#00f0a8]/25 text-[#00f0a8] font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-[#00f0a8]/25 flex items-center justify-center cursor-pointer"
+                className="h-12 md:h-14 bg-[#00f0a8]/15 hover:bg-[#00f0a8]/25 active:bg-[#00f0a8]/35 text-[#00f0a8] font-black text-2xl rounded-2xl active:scale-[0.98] transition-colors duration-75 shadow-md border border-[#00f0a8]/25 flex items-center justify-center cursor-pointer touch-manipulation select-none"
               >
                 +
               </button>

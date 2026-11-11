@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { 
   Play, ChevronLeft, ChevronRight, Users, Shield, Target, 
@@ -54,6 +54,11 @@ export default function Setup() {
   const playerSliceAssignments = useMemo(() => {
     return assignRandomAdjacentSlices(playerList, slicesPerPlayer);
   }, [playerList, slicesPerPlayer, randomSeed]);
+
+  // Reset scroll to top on mount (especially for Safari / mobile browsers)
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   if (!selectedPlayers || selectedPlayers.length === 0) {
     return <Navigate to="/game" />;

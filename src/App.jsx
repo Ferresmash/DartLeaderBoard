@@ -1,5 +1,6 @@
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Navigation from './components/Navigation';
+import ScrollToTop from './components/ScrollToTop';
 import Home from './views/Home';
 import AddPlayer from './views/AddPlayer';
 import PlayerProfiles from './views/PlayerProfiles';
@@ -86,24 +87,34 @@ export default function App() {
 
   return (
     <HashRouter>
-      <div className="min-h-[100dvh] bg-[#0a0e17] text-slate-100 font-sans selection:bg-[#00f0a8]/30 selection:text-white overflow-x-hidden">
-        <Navigation />
-        <div className="max-w-md md:max-w-6xl mx-auto w-full min-h-[100dvh] pt-0 md:pt-20 pb-0 relative transition-all duration-300">
-          <Routes>
-            <Route path="/" element={<Home players={players} matches={matches} />} />
-            <Route path="/add" element={<AddPlayer onPlayerAdded={fetchData} />} />
-            <Route path="/profile" element={<PlayerProfiles players={players} matches={matches} />} />
-            <Route path="/profile/:id" element={<PlayerDetail players={players} matches={matches} />} />
-            <Route path="/game" element={<GameLobby players={players} />} />
-            <Route path="/game/setup" element={<GameSetup />} />
-            <Route path="/game/play" element={<GamePlay onMatchComplete={fetchData} />} />
-            <Route path="/matches" element={<MatchesList matches={matches} players={players} />} />
-            <Route path="/matches/:id" element={<MatchDetail matches={matches} players={players} />} />
-            <Route path="/compare" element={<CompareStats players={players} matches={matches} />} />
-          </Routes>
-        </div>
-      </div>
+      <ScrollToTop />
+      <AppContent players={players} matches={matches} fetchData={fetchData} />
     </HashRouter>
+  );
+}
+
+function AppContent({ players, matches, fetchData }) {
+  const location = useLocation();
+  const isGameActive = location.pathname.startsWith('/game/play');
+
+  return (
+    <div className="min-h-[100dvh] bg-[#0a0e17] text-slate-100 font-sans selection:bg-[#00f0a8]/30 selection:text-white overflow-x-hidden">
+      <Navigation />
+      <div className={`max-w-md md:max-w-6xl mx-auto w-full min-h-[100dvh] ${isGameActive ? 'pt-0' : 'pt-0 md:pt-20'} pb-0 relative transition-all duration-300`}>
+        <Routes>
+          <Route path="/" element={<Home players={players} matches={matches} />} />
+          <Route path="/add" element={<AddPlayer onPlayerAdded={fetchData} />} />
+          <Route path="/profile" element={<PlayerProfiles players={players} matches={matches} />} />
+          <Route path="/profile/:id" element={<PlayerDetail players={players} matches={matches} />} />
+          <Route path="/game" element={<GameLobby players={players} />} />
+          <Route path="/game/setup" element={<GameSetup />} />
+          <Route path="/game/play" element={<GamePlay onMatchComplete={fetchData} />} />
+          <Route path="/matches" element={<MatchesList matches={matches} players={players} />} />
+          <Route path="/matches/:id" element={<MatchDetail matches={matches} players={players} />} />
+          <Route path="/compare" element={<CompareStats players={players} matches={matches} />} />
+        </Routes>
+      </div>
+    </div>
   );
 }
 

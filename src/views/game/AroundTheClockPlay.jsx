@@ -264,7 +264,7 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#0a0e17] font-sans flex flex-col select-none overflow-hidden pb-4">
+    <div className="fixed inset-0 z-[100] bg-[#070b12] font-sans flex flex-col select-none overflow-hidden">
       {/* Header */}
       <DartFlowHeader
         showBack
@@ -305,9 +305,9 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
                   if (turnDarts.length === 0) setActiveIdx(idx);
                 }}
                 className={clsx(
-                  "relative rounded-2xl p-2.5 flex flex-col justify-between border-2 transition-all duration-300 cursor-pointer overflow-hidden",
+                  "relative rounded-2xl p-2.5 flex flex-col justify-between border-2 transition-colors duration-150 cursor-pointer overflow-hidden",
                   isActive
-                    ? `${theme.border} ${theme.cardBgActive} ${theme.activeGlow} scale-[1.02] z-10`
+                    ? `${theme.border} ${theme.cardBgActive} ${theme.activeGlow} z-10 ring-1 ring-white/10`
                     : `${theme.borderInactive} ${theme.cardBgInactive} opacity-75 hover:opacity-100`
                 )}
               >
@@ -404,12 +404,12 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
           </div>
         </div>
 
-        {/* Action toast */}
-        {toastMessage && (
-          <div className="text-center text-xs font-black text-cyan-300 py-0.5 animate-in fade-in">
-            {toastMessage}
+        {/* Action toast slot (fixed height to prevent layout jump) */}
+        <div className="h-6 flex items-center justify-center shrink-0">
+          <div className={clsx("text-center text-xs font-black text-cyan-300 py-0.5 px-3 rounded-xl transition-opacity duration-150", toastMessage ? "opacity-100" : "opacity-0 select-none pointer-events-none")}>
+            {toastMessage || '-'}
           </div>
-        )}
+        </div>
 
         {/* Input Section */}
         {inputMethod === 'dartboard' ? (

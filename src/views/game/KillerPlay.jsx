@@ -444,11 +444,11 @@ export default function KillerPlay({ onMatchComplete }) {
                   if (!isEliminated) setActiveIdx(idx);
                 }}
                 className={clsx(
-                  "flex-1 min-w-[85px] rounded-2xl p-2 flex flex-col items-center justify-between border-2 transition-all duration-300 relative select-none",
+                  "flex-1 min-w-[85px] rounded-2xl p-2 flex flex-col items-center justify-between border-2 transition-colors duration-150 relative select-none",
                   isEliminated
                     ? "bg-[#0b1018]/60 border-white/5 opacity-35 grayscale"
                     : isActive
-                      ? "bg-[#111928] scale-[1.02] shadow-[0_0_15px_rgba(0,240,168,0.25)] cursor-pointer"
+                      ? "bg-[#111928] shadow-[0_0_15px_rgba(0,240,168,0.25)] ring-1 ring-white/10 cursor-pointer"
                       : "bg-[#0d1420] border-white/10 opacity-75 hover:opacity-100 cursor-pointer"
                 )}
                 style={{
@@ -656,12 +656,12 @@ export default function KillerPlay({ onMatchComplete }) {
           />
         </div>
 
-        {/* Action feedback toast */}
-        {lastActionToast && (
-          <div className="text-center text-xs font-black text-slate-200 py-0.5 animate-in fade-in">
-            {lastActionToast}
+        {/* Action feedback toast slot (fixed height to prevent layout jump) */}
+        <div className="h-5 flex items-center justify-center shrink-0">
+          <div className={clsx("text-center text-xs font-black text-slate-200 transition-opacity duration-150", lastActionToast ? "opacity-100" : "opacity-0 select-none pointer-events-none")}>
+            {lastActionToast || '-'}
           </div>
-        )}
+        </div>
 
         {/* BOTTOM MINIMAL CONTROLS (Miss & Undo) */}
         <div className="flex items-center justify-between gap-3 pt-1 pb-1">
