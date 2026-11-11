@@ -61,8 +61,11 @@ export default function KillerPlay({ onMatchComplete }) {
   const [lastActionToast, setLastActionToast] = useState(null);
   const [isZoomEnabled, setIsZoomEnabled] = useState(true);
   const [focusedOpponentId, setFocusedOpponentId] = useState(null);
+  const [showMultiplierMenu, setShowMultiplierMenu] = useState(false);
 
   const autoAdvanceTimerRef = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const isLongPressTriggeredRef = useRef(false);
 
   // Persist game state
   useEffect(() => {
@@ -84,6 +87,9 @@ export default function KillerPlay({ onMatchComplete }) {
       if (autoAdvanceTimerRef.current) {
         clearTimeout(autoAdvanceTimerRef.current);
       }
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+      }
     };
   }, []);
 
@@ -103,18 +109,76 @@ export default function KillerPlay({ onMatchComplete }) {
   // Target slices for smart mini-zoom (Own slices when hunting hearts, Opponent slices when Killer)
   const targetSlices = useMemo(() => {
     if (!isEligibleToAttack) {
-      return activePlayer?.assignedSlices || [];
+      return Array.isArray(activePlayer?.assignedSlices) ? activePlayer.assignedSlices : [];
     }
     if (livingOpponents.length === 0) return [];
     if (focusedOpponentId) {
       const opp = livingOpponents.find(p => p.id === focusedOpponentId);
-      if (opp) return opp.assignedSlices;
+      if (opp && Array.isArray(opp.assignedSlices) && opp.assignedSlices.length > 0) {
+        return opp.assignedSlices;
+      }
     }
-    return livingOpponents[0]?.assignedSlices || [];
+    return Array.isArray(livingOpponents[0]?.assignedSlices) ? livingOpponents[0].assignedSlices : [];
   }, [isEligibleToAttack, activePlayer, livingOpponents, focusedOpponentId]);
+
+  const primarySector = useMemo(() => {
+    return Array.isArray(activePlayer?.assignedSlices) && activePlayer.assignedSlices.length > 0
+      ? activePlayer.assignedSlices[0]
+      : 20;
+  }, [activePlayer]);
+
+  const focusedOpponent = useMemo(() => {
+    if (livingOpponents.length === 0) return null;
+    return livingOpponents.find(p => p.id === (focusedOpponentId || livingOpponents[0]?.id)) || livingOpponents[0];
+  }, [livingOpponents, focusedOpponentId]);
+
+  const attackSector = useMemo(() => {
+    if (Array.isArray(targetSlices) && targetSlices.length > 0) {
+      return targetSlices[0];
+    }
+    return focusedOpponent?.assignedSlices?.[0] || 20;
+  }, [targetSlices, focusedOpponent]);
+
+  // Pointer event handlers for HIT button (Tap = 1x single hit; Long hold = slide up 2x/3x menu when hitting self)
+  const handleHitPointerDown = (e) => {
+    if (turnDarts.length >= 3 || winner || isSaving) return;
+    isLongPressTriggeredRef.current = false;
+    // Long hold only triggers when hitting yourself!
+    if (!isEligibleToAttack) {
+      longPressTimerRef.current = setTimeout(() => {
+        isLongPressTriggeredRef.current = true;
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate(40); } catch(err) {}
+        }
+        setShowMultiplierMenu(true);
+      }, 350);
+    }
+  };
+
+  const handleHitPointerUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (isLongPressTriggeredRef.current) {
+      return;
+    }
+    const sec = isEligibleToAttack ? attackSector : primarySector;
+    if (sec !== null && sec !== undefined) {
+      handleHitSector(sec, 1);
+    }
+  };
+
+  const handleHitPointerLeave = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
 
   // Function to advance turn to next living player
   const advanceToNextPlayer = (updatedPlayers, currentIdx, completedDarts) => {
+    setShowMultiplierMenu(false);
     const nextPlayers = JSON.parse(JSON.stringify(updatedPlayers));
     const curr = nextPlayers[currentIdx];
 
@@ -144,10 +208,20 @@ export default function KillerPlay({ onMatchComplete }) {
       return;
     }
 
-    // Advance to next active (living) player
+    // Advance to next active (living) player with bounded loop
     let next = (currentIdx + 1) % nextPlayers.length;
-    while (nextPlayers[next].isEliminated) {
+    let attempts = 0;
+    while (nextPlayers[next]?.isEliminated && attempts < nextPlayers.length) {
       next = (next + 1) % nextPlayers.length;
+      attempts++;
+    }
+
+    if (attempts >= nextPlayers.length) {
+      const matchWinner = living[0] || curr;
+      setWinner(matchWinner);
+      setPlayers(nextPlayers);
+      handleMatchWin(matchWinner, nextPlayers);
+      return;
     }
 
     setActiveIdx(next);
@@ -187,9 +261,9 @@ export default function KillerPlay({ onMatchComplete }) {
           ? `D${sector}` 
           : `S${sector}`;
 
-    const isOwn = curr.assignedSlices.includes(sector);
+    const isOwn = Array.isArray(curr?.assignedSlices) && curr.assignedSlices.includes(sector);
     const opponent = newPlayers.find(
-      p => p.id !== curr.id && !p.isEliminated && p.assignedSlices.includes(sector)
+      p => p.id !== curr?.id && !p.isEliminated && Array.isArray(p.assignedSlices) && p.assignedSlices.includes(sector)
     );
 
     if (isOwn) {
@@ -293,27 +367,23 @@ export default function KillerPlay({ onMatchComplete }) {
     }
   };
 
-  // Manual pass turn before throwing 3 darts
-  const handlePassTurn = () => {
-    if (autoAdvanceTimerRef.current) {
-      clearTimeout(autoAdvanceTimerRef.current);
-    }
-    advanceToNextPlayer(players, activeIdx, turnDarts);
-  };
-
   // Undo last action
   const handleUndo = () => {
     if (historyStack.length === 0) return;
+    setShowMultiplierMenu(false);
     if (autoAdvanceTimerRef.current) {
       clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
     }
     const lastSnap = historyStack[historyStack.length - 1];
-    setPlayers(lastSnap.players);
-    setActiveIdx(lastSnap.activeIdx);
-    setTurnDarts(lastSnap.turnDarts);
-    setTurnHistory(lastSnap.turnHistory);
+    if (!lastSnap) return;
+    setPlayers(lastSnap.players || []);
+    setActiveIdx(lastSnap.activeIdx ?? 0);
+    setTurnDarts(lastSnap.turnDarts || []);
+    setTurnHistory(lastSnap.turnHistory || []);
     setHistoryStack(prev => prev.slice(0, -1));
     setWinner(null);
+    setIsSaving(false);
     setLastActionToast('Undone');
     setTimeout(() => setLastActionToast(null), 1200);
   };
@@ -435,7 +505,14 @@ export default function KillerPlay({ onMatchComplete }) {
               <div
                 key={p.id || idx}
                 onClick={() => {
-                  if (!isEliminated) setActiveIdx(idx);
+                  if (!isEliminated) {
+                    if (autoAdvanceTimerRef.current) {
+                      clearTimeout(autoAdvanceTimerRef.current);
+                      autoAdvanceTimerRef.current = null;
+                    }
+                    setActiveIdx(idx);
+                    setTurnDarts([]);
+                  }
                 }}
                 className={clsx(
                   "flex-1 min-w-[85px] rounded-2xl p-2 flex flex-col items-center justify-between border-2 transition-all duration-300 relative select-none",
@@ -466,18 +543,18 @@ export default function KillerPlay({ onMatchComplete }) {
                     {p.pfpUrl ? (
                       <img src={p.pfpUrl} alt={p.name} className="w-full h-full object-cover" />
                     ) : (
-                      <span>{p.name.slice(0, 2).toUpperCase()}</span>
+                      <span>{(p.name || 'P').slice(0, 2).toUpperCase()}</span>
                     )}
                   </div>
                   <span className="font-extrabold text-white text-xs truncate max-w-[60px]">
-                    {p.name.split(' ')[0]}
+                    {p?.name ? p.name.split(' ')[0] : 'Player'}
                   </span>
                 </div>
 
                 {/* Hearts row: 3 glowing hearts */}
                 <div className="flex items-center justify-center gap-1 my-0.5">
                   {[0, 1, 2].map(hIdx => {
-                    const isFilled = p.hearts > hIdx;
+                    const isFilled = (p.hearts ?? 0) > hIdx;
                     return (
                       <Heart
                         key={hIdx}
@@ -504,7 +581,7 @@ export default function KillerPlay({ onMatchComplete }) {
                     <span className="text-[9px] font-bold text-slate-500 uppercase">DEAD</span>
                   ) : (
                     <span className="text-slate-400">
-                      [{p.assignedSlices.join(', ')}]
+                      [{Array.isArray(p.assignedSlices) ? p.assignedSlices.join(', ') : ''}]
                     </span>
                   )}
                 </div>
@@ -533,7 +610,7 @@ export default function KillerPlay({ onMatchComplete }) {
                   )
                 ) : (
                   <span className="text-[#00f0a8]">
-                    Tap your slice [{activePlayer.assignedSlices.join(', ')}] to fill hearts ({activePlayer.hearts}/3)
+                    Tap your slice [{Array.isArray(activePlayer?.assignedSlices) ? activePlayer.assignedSlices.join(', ') : ''}] to fill hearts ({activePlayer?.hearts ?? 0}/3)
                   </span>
                 )}
               </span>
@@ -590,8 +667,8 @@ export default function KillerPlay({ onMatchComplete }) {
                   )}
                 >
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: opp.theme?.accentHex || '#f43f5e' }} />
-                  <span>{opp.name.split(' ')[0]}</span>
-                  <span className="text-[10px] opacity-75 font-mono">[{opp.assignedSlices.join(',')}]</span>
+                  <span>{opp?.name ? opp.name.split(' ')[0] : 'Player'}</span>
+                  <span className="text-[10px] opacity-75 font-mono">[{Array.isArray(opp?.assignedSlices) ? opp.assignedSlices.join(',') : ''}]</span>
                 </button>
               );
             })}
@@ -602,10 +679,10 @@ export default function KillerPlay({ onMatchComplete }) {
         <div className="flex-1 flex items-center justify-center py-1">
           <KillerBoard
             sectorPlayerMap={sectorPlayerMap}
-            activePlayerId={activePlayer.id}
-            isKiller={activePlayer.isKiller}
+            activePlayerId={activePlayer?.id}
+            isKiller={!!activePlayer?.isKiller}
             canAttack={isEligibleToAttack}
-            activePlayerSlices={activePlayer.assignedSlices}
+            activePlayerSlices={Array.isArray(activePlayer?.assignedSlices) ? activePlayer.assignedSlices : []}
             targetSlices={targetSlices}
             isZoomEnabled={isZoomEnabled}
             onToggleZoom={() => setIsZoomEnabled(z => !z)}
@@ -620,38 +697,141 @@ export default function KillerPlay({ onMatchComplete }) {
           </div>
         )}
 
-        {/* BOTTOM MINIMAL CONTROLS (Miss & Undo) */}
-        <div className="flex items-center justify-between gap-3 pt-1 pb-1">
+        {/* BOTTOM CONTROLS (Miss, Undo, HIT Button) */}
+        <div className="flex items-center gap-2.5 pt-1 pb-1">
+          {/* Miss Button */}
           <button
             onClick={() => handleHitSector(0, 0)}
-            disabled={turnDarts.length >= 3}
-            className="flex-1 py-3 bg-[#131b28] hover:bg-[#1a2538] disabled:opacity-25 active:scale-95 transition-all rounded-2xl border border-white/10 text-slate-300 hover:text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+            disabled={turnDarts.length >= 3 || isSaving || !!winner}
+            className="w-14 sm:w-16 py-3 bg-[#131b28] hover:bg-[#1a2538] disabled:opacity-25 active:scale-95 transition-all rounded-2xl border border-white/10 text-rose-400 hover:text-rose-300 font-extrabold text-xs flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-md shrink-0"
+            title="Miss Dart (0)"
           >
             <X className="w-4 h-4 text-rose-400" />
-            <span>Miss / Off Board</span>
+            <span className="text-[10px]">Miss</span>
           </button>
 
+          {/* Undo Button */}
           <button
             onClick={handleUndo}
-            disabled={historyStack.length === 0}
-            className="px-4 py-3 bg-[#131b28] hover:bg-[#1a2538] disabled:opacity-25 active:scale-95 transition-all rounded-2xl border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
-            title="Undo"
+            disabled={historyStack.length === 0 || isSaving}
+            className="w-14 sm:w-16 py-3 bg-[#131b28] hover:bg-[#1a2538] disabled:opacity-25 active:scale-95 transition-all rounded-2xl border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-md shrink-0"
+            title="Undo Last Dart"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Undo</span>
+            <span className="text-[10px]">Undo</span>
           </button>
 
-          {turnDarts.length > 0 && turnDarts.length < 3 && (
-            <button
-              onClick={handlePassTurn}
-              className="py-3 px-3.5 bg-[#00f0a8]/15 hover:bg-[#00f0a8]/25 text-[#00f0a8] border border-[#00f0a8]/30 font-extrabold text-xs rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer"
-            >
-              <span>Pass</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
+          {/* HIT BUTTON */}
+          <button
+            onPointerDown={handleHitPointerDown}
+            onPointerUp={handleHitPointerUp}
+            onPointerLeave={handleHitPointerLeave}
+            onPointerCancel={handleHitPointerLeave}
+            onContextMenu={(e) => e.preventDefault()}
+            disabled={turnDarts.length >= 3 || isSaving || !!winner}
+            className={clsx(
+              "flex-1 py-3 px-3 rounded-2xl font-black text-xs md:text-sm uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 select-none active:scale-[0.97] cursor-pointer shadow-lg",
+              turnDarts.length >= 3
+                ? "bg-[#131b28] text-slate-500 border border-white/5 opacity-40 cursor-not-allowed"
+                : isEligibleToAttack
+                  ? "bg-rose-500 hover:bg-rose-600 text-white shadow-[0_0_20px_rgba(244,63,94,0.4)] border border-rose-400/40"
+                  : "bg-gradient-to-r from-[#00f0a8] to-[#2dd4bf] hover:from-[#00d694] hover:to-[#14b8a6] text-[#070b12] shadow-[0_0_20px_rgba(0,240,168,0.35)]"
+            )}
+          >
+            {isEligibleToAttack ? (
+              <>
+                <Skull className="w-4 h-4 fill-current shrink-0" />
+                <span className="truncate">
+                  Attack {focusedOpponent?.name ? focusedOpponent.name.split(' ')[0] : 'Target'} [{attackSector}]
+                </span>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 stroke-[2.5] shrink-0" />
+                <span className="truncate">Hit [{primarySector}]</span>
+                <span className="text-[9px] font-extrabold opacity-75 lowercase tracking-normal bg-black/20 px-1.5 py-0.5 rounded-md hidden xs:inline">
+                  hold: 2x/3x
+                </span>
+              </div>
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Slide-Up Multiplier Mini Menu (When long-holding on Hit button for self) */}
+      {showMultiplierMenu && (
+        <div className="fixed inset-0 z-[150] flex flex-col justify-end p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div 
+            className="absolute inset-0"
+            onClick={() => setShowMultiplierMenu(false)}
+          />
+          <div className="relative w-full max-w-md mx-auto bg-[#0d1522] border border-white/15 rounded-3xl p-5 shadow-2xl flex flex-col gap-3 animate-in slide-in-from-bottom-8 duration-250 z-10">
+            <div className="flex items-center justify-between pb-1 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs text-[#0a0e17]"
+                  style={{ backgroundColor: activePlayer?.theme?.accentHex || '#00f0a8' }}
+                >
+                  {primarySector}
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-white text-sm">Select Sector Ring</h3>
+                  <p className="text-[11px] text-slate-400">Gains hearts for {activePlayer?.name ? activePlayer.name.split(' ')[0] : 'Player'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowMultiplierMenu(false)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5 pt-1">
+              {/* Single (1x) */}
+              <button
+                onClick={() => {
+                  handleHitSector(primarySector, 1);
+                  setShowMultiplierMenu(false);
+                }}
+                className="py-3 px-2 bg-[#141d2c] hover:bg-[#1a2538] border border-white/10 hover:border-white/20 rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer group"
+              >
+                <span className="text-[10px] font-bold uppercase text-slate-400 group-hover:text-slate-200">Single</span>
+                <span className="text-xl font-black text-white">S{primarySector}</span>
+                <span className="text-[11px] font-black text-[#00f0a8] bg-[#00f0a8]/10 px-2 py-0.5 rounded-full border border-[#00f0a8]/20">+1 ❤️</span>
+              </button>
+
+              {/* Double (2x) */}
+              <button
+                onClick={() => {
+                  handleHitSector(primarySector, 2);
+                  setShowMultiplierMenu(false);
+                }}
+                className="py-3 px-2 bg-[#15222c] hover:bg-[#1b2b38] border border-[#5eead4]/30 hover:border-[#5eead4] rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer group shadow-[0_0_15px_rgba(94,234,212,0.15)]"
+              >
+                <span className="text-[10px] font-bold uppercase text-teal-300">Double</span>
+                <span className="text-xl font-black text-white">D{primarySector}</span>
+                <span className="text-[11px] font-black text-teal-300 bg-teal-500/15 px-2 py-0.5 rounded-full border border-teal-500/30">+2 ❤️</span>
+              </button>
+
+              {/* Triple (3x) */}
+              <button
+                onClick={() => {
+                  handleHitSector(primarySector, 3);
+                  setShowMultiplierMenu(false);
+                }}
+                className="py-3 px-2 bg-gradient-to-b from-amber-500/15 to-[#00f0a8]/15 hover:from-amber-500/25 hover:to-[#00f0a8]/25 border border-amber-400/40 hover:border-amber-400 rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer group shadow-[0_0_20px_rgba(251,191,36,0.2)]"
+              >
+                <span className="text-[10px] font-black uppercase text-amber-300 flex items-center gap-0.5">
+                  <Flame className="w-3 h-3 fill-current" /> Triple
+                </span>
+                <span className="text-xl font-black text-white">T{primarySector}</span>
+                <span className="text-[11px] font-black text-amber-300 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-400/40">+3 ❤️ (Killer)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettingsModal && (

@@ -68,6 +68,8 @@ export default function Setup() {
 
     if (gameMode === 'killer') {
       if (isOverfilled) return;
+      localStorage.removeItem('activeDartsGame');
+      localStorage.removeItem('activeKillerGame');
       // Pass the randomized slice assignments to the match
       navigate('/game/play', {
         state: {
@@ -85,6 +87,8 @@ export default function Setup() {
     }
 
     // Classic X01
+    localStorage.removeItem('activeKillerGame');
+    localStorage.removeItem('activeDartsGame');
     const startingScore = mode === 'custom' ? parseInt(customScore) || 301 : parseInt(mode);
     navigate('/game/play', { 
       state: { 

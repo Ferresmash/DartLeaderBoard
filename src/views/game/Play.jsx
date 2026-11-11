@@ -96,8 +96,9 @@ const PLAYER_THEMES = [
 ];
 
 const getNextActiveIdx = (currentIdx, isSD, sdPlayers, totalLen) => {
+  if (totalLen <= 0) return 0;
   let next = (currentIdx + 1) % totalLen;
-  if (isSD) {
+  if (isSD && Array.isArray(sdPlayers) && sdPlayers.length > 0) {
     let attempts = 0;
     while (!sdPlayers.includes(next) && attempts < totalLen) {
       next = (next + 1) % totalLen;
@@ -113,7 +114,7 @@ export default function Play({ onMatchComplete }) {
 
   const isKillerMode = 
     location.state?.gameMode === 'killer' || 
-    (!location.state?.gameMode && !!localStorage.getItem('activeKillerGame') && !localStorage.getItem('activeDartsGame'));
+    (!location.state?.gameMode && !!localStorage.getItem('activeKillerGame'));
 
   if (isKillerMode) {
     return <KillerPlay onMatchComplete={onMatchComplete} />;
@@ -169,7 +170,7 @@ export default function Play({ onMatchComplete }) {
   useEffect(() => { isSavingRef.current = isSaving; }, [isSaving]);
 
   if (!isNewGame && !savedGame) return <Navigate to="/game" />;
-  const activePlayer = players[activeIdx] || players[0];
+  const activePlayer = players[activeIdx] || players[0] || { id: 'p0', name: 'Player', currentScore: startingScore, dartsThrown: 0 };
 
   const handleKeypad = (val) => {
     if (val === '+') {
@@ -191,7 +192,7 @@ export default function Play({ onMatchComplete }) {
 
   const finalizeTurn = (score, isExplicitBust) => {
     const isRoundEnd = isSuddenDeath ? activeIdx === suddenDeathPlayers[suddenDeathPlayers.length - 1] : activeIdx === players.length - 1;
-    const currScore = activePlayer.currentScore;
+    const currScore = activePlayer.currentScore ?? startingScore;
     let newScore = currScore - score;
     let isBust = isExplicitBust;
 
@@ -201,15 +202,21 @@ export default function Play({ onMatchComplete }) {
     } else {
       if (!isBust && (newScore < 0 || (outRule === 'double' && newScore === 1))) isBust = true;
       if (isBust) { newScore = currScore; score = 0; }
-      if (!isBust && score > 0) setBestScores(prev => ({ ...prev, [activePlayer.id]: Math.max(prev[activePlayer.id] || 0, score) }));
+      if (!isBust && score > 0 && activePlayer.id) {
+        setBestScores(prev => ({ ...prev, [activePlayer.id]: Math.max(prev[activePlayer.id] || 0, score) }));
+      }
     }
 
-    setMatchTurns(prev => [...prev, { playerId: activePlayer.id, score: isExplicitBust ? 0 : score, isBust, timestamp: Date.now() }]);
-    setHistory(prev => [...prev, { playerIdx: activeIdx, prevScore: currScore, scoreInputted: score, dartsThrownBefore: activePlayer.dartsThrown, isBustRecorded: isBust, wasSuddenDeath: isSuddenDeath, prevSuddenDeathScores: { ...suddenDeathScores }, prevSuddenDeathPlayers: [...suddenDeathPlayers] }]);
+    if (activePlayer.id) {
+      setMatchTurns(prev => [...prev, { playerId: activePlayer.id, score: isExplicitBust ? 0 : score, isBust, timestamp: Date.now() }]);
+    }
+    setHistory(prev => [...prev, { playerIdx: activeIdx, prevScore: currScore, scoreInputted: score, dartsThrownBefore: activePlayer.dartsThrown || 0, isBustRecorded: isBust, wasSuddenDeath: isSuddenDeath, prevSuddenDeathScores: { ...suddenDeathScores }, prevSuddenDeathPlayers: [...suddenDeathPlayers] }]);
 
-    const newPlayers = [...players];
-    newPlayers[activeIdx].currentScore = newScore;
-    newPlayers[activeIdx].dartsThrown += 3;
+    const newPlayers = JSON.parse(JSON.stringify(players));
+    if (newPlayers[activeIdx]) {
+      newPlayers[activeIdx].currentScore = newScore;
+      newPlayers[activeIdx].dartsThrown = (newPlayers[activeIdx].dartsThrown || 0) + 3;
+    }
 
     if (isSuddenDeath) {
       const newSDScores = { ...suddenDeathScores, [activeIdx]: score };
@@ -331,7 +338,7 @@ export default function Play({ onMatchComplete }) {
                 <div className="flex items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
                         <span className={clsx("w-5 h-5 rounded-md font-black text-[11px] flex items-center justify-center shrink-0", theme.badgeBg, theme.badgeText)}>{i + 1}</span>
-                        <span className="font-extrabold text-white text-xs truncate">{p.name.split(' ')[0]}</span>
+                        <span className="font-extrabold text-white text-xs truncate">{p?.name ? p.name.split(' ')[0] : 'Player'}</span>
                     </div>
                 </div>
                 <div className="flex flex-col items-center justify-center my-auto">
@@ -348,7 +355,16 @@ export default function Play({ onMatchComplete }) {
         </div>
 
         {inputMethod === 'dartboard' ? (
-          <div className="flex-1 flex flex-col justify-end mt-1"><InteractiveDartboard onScoreSubmit={(s) => finalizeTurn(s, false)} onBust={handleExplicitBust} activePlayerName={activePlayer.name} startingScore={startingScore} currentScore={activePlayer.currentScore} /></div>
+          <div className="flex-1 flex flex-col justify-end mt-1">
+            <InteractiveDartboard 
+              onScoreSubmit={(s) => finalizeTurn(s, false)} 
+              onBust={handleExplicitBust} 
+              activePlayerName={activePlayer?.name || 'Player'} 
+              startingScore={startingScore} 
+              currentScore={activePlayer?.currentScore ?? startingScore}
+              activePlayerSlices={[]}
+            />
+          </div>
         ) : (
           <div className="flex flex-col justify-end w-full max-w-md mx-auto">
             {/* Input display bar with Target icon, current typed score, Backspace and Check buttons */}
@@ -453,7 +469,7 @@ export default function Play({ onMatchComplete }) {
       {checkoutConfirmScore !== null && (
         <div className="fixed inset-0 z-[300] bg-[#0a0e17]/85 backdrop-blur-md flex items-center justify-center p-6">
           <div className="bg-[#131b2a] border border-[#00f0a8] rounded-3xl p-8 max-w-sm w-full text-center">
-            <h2 className="text-2xl font-black text-white mb-6">Did {activePlayer.name.split(' ')[0]} checkout?</h2>
+            <h2 className="text-2xl font-black text-white mb-6">Did {activePlayer?.name ? activePlayer.name.split(' ')[0] : 'Player'} checkout?</h2>
             <div className="flex gap-3">
               <button onClick={() => { const s = checkoutConfirmScore; setCheckoutConfirmScore(null); finalizeTurn(s, false); }} className="flex-1 bg-[#00f0a8] text-[#0a0e17] py-4 rounded-xl font-black">Yes</button>
               <button onClick={() => setCheckoutConfirmScore(null)} className="flex-1 bg-[#1b2537] text-white py-4 rounded-xl font-bold">No</button>

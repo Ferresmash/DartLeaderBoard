@@ -12,21 +12,37 @@ import {
   getSwedishParts 
 } from '../utils/dateUtils';
 
+const isMatchInGameMode = (match, filter) => {
+  if (filter === 'all') return true;
+  if (filter === 'killer') {
+    return match.gameMode === 'killer' || match.startingScore === 'Killer';
+  }
+  if (filter === '301') {
+    return (match.startingScore === 301 || match.startingScore === '301') && match.gameMode !== 'killer';
+  }
+  if (filter === '501') {
+    return (match.startingScore === 501 || match.startingScore === '501') && match.gameMode !== 'killer';
+  }
+  return true;
+};
+
 export default function Home({ players, matches }) {
   const navigate = useNavigate();
   const [timeSpan, setTimeSpan] = useState('this_week');
   const [statType, setStatType] = useState('wins');
   const [onlyInOffice, setOnlyInOffice] = useState(true);
+  const [gameModeFilter, setGameModeFilter] = useState('301');
   
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [selectedWeekStart, setSelectedWeekStart] = useState(null);
 
   const leaderboard = useMemo(() => {
     const activeOfficeMatches = onlyInOffice ? matches.filter(isInOfficeMatch) : matches;
+    const modeFilteredMatches = activeOfficeMatches.filter(m => isMatchInGameMode(m, gameModeFilter));
     const bounds = (timeSpan === 'this_week' || timeSpan === '7_days') 
       ? getThisWeekBounds() 
       : (timeSpan === 'this_month' || timeSpan === '30_days' ? getThisMonthBounds() : null);
-    const timeFilteredMatches = activeOfficeMatches.filter(m => isMatchInTimeSpan(m, timeSpan, bounds));
+    const timeFilteredMatches = modeFilteredMatches.filter(m => isMatchInTimeSpan(m, timeSpan, bounds));
 
     return players.map(p => {
       const playerWinnerMatches = timeFilteredMatches.filter(m => m.winnerId === p.id);
@@ -98,7 +114,7 @@ export default function Home({ players, matches }) {
       if (statType === 'win_rate') return (b.winRate||0) - (a.winRate||0) || (b.filteredWins - a.filteredWins);
       return (b.filteredWins - a.filteredWins) || (b.totalWins - a.totalWins) || (b.bestScore - a.bestScore);
     });
-  }, [players, matches, timeSpan, statType, onlyInOffice]);
+  }, [players, matches, timeSpan, statType, onlyInOffice, gameModeFilter]);
 
   useEffect(() => {
     if (leaderboard.length > 0) {
@@ -114,7 +130,8 @@ export default function Home({ players, matches }) {
     const now = new Date();
     
     const activeOfficeMatches = onlyInOffice ? matches.filter(isInOfficeMatch) : matches;
-    const playerMatches = activeOfficeMatches.filter(m => 
+    const modeFilteredMatches = activeOfficeMatches.filter(m => isMatchInGameMode(m, gameModeFilter));
+    const playerMatches = modeFilteredMatches.filter(m => 
       (m.participantIds && m.participantIds.includes(selectedPlayerId)) || 
       m.winnerId === selectedPlayerId
     );
@@ -193,7 +210,7 @@ export default function Home({ players, matches }) {
     });
     
     return data;
-  }, [matches, selectedPlayerId, selectedWeekStart, onlyInOffice]);
+  }, [matches, selectedPlayerId, selectedWeekStart, onlyInOffice, gameModeFilter]);
 
   const statLabels = {
     'wins': 'Total Wins',
@@ -207,6 +224,13 @@ export default function Home({ players, matches }) {
     'this_week': 'This Week',
     'this_month': 'This Month',
     'all_time': 'All Time'
+  };
+
+  const gameModeLabels = {
+    '301': '301 Darts',
+    '501': '501 Darts',
+    'killer': 'Killer',
+    'all': 'All Modes'
   };
 
   const handleChartClick = (data) => {
@@ -237,6 +261,21 @@ export default function Home({ players, matches }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+            {/* Game Mode Filter (Default: 301) */}
+            <div className="relative">
+              <select 
+                value={gameModeFilter}
+                onChange={(e) => setGameModeFilter(e.target.value)}
+                className="appearance-none bg-[#0e1420] border border-white/10 hover:border-[#00f0a8]/40 text-[#00f0a8] px-3.5 py-2 pr-8 rounded-xl font-extrabold text-xs focus:outline-none focus:border-[#00f0a8] cursor-pointer transition-colors shadow-sm"
+              >
+                <option value="301" className="bg-[#131b2a] text-white">Mode: 301</option>
+                <option value="501" className="bg-[#131b2a] text-white">Mode: 501</option>
+                <option value="killer" className="bg-[#131b2a] text-white">Mode: Killer</option>
+                <option value="all" className="bg-[#131b2a] text-white">All Modes</option>
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-[#00f0a8] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
             {/* In Office Filter */}
             <label className="flex items-center gap-2 cursor-pointer bg-[#0e1420] border border-white/10 px-3 py-2 rounded-xl text-xs font-bold text-slate-300 hover:border-[#00f0a8]/40 transition-colors">
               <input type="checkbox" className="hidden" checked={onlyInOffice} onChange={() => setOnlyInOffice(!onlyInOffice)} />
@@ -283,7 +322,7 @@ export default function Home({ players, matches }) {
             <div className="flex justify-between items-center px-1">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Top Competitors</span>
               <span className="text-[11px] font-extrabold text-[#00f0a8] bg-[#00f0a8]/10 px-2.5 py-0.5 rounded-full border border-[#00f0a8]/20">
-                Sorted by {statLabels[statType]}
+                Sorted by {statLabels[statType]} • {gameModeLabels[gameModeFilter]}
               </span>
             </div>
 

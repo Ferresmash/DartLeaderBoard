@@ -199,7 +199,7 @@ export default function InteractiveDartboard({
 
             const numPos = polarToCartesian(0, 0, 186, idx * 18);
             const playerInfo = sectorPlayerMap ? sectorPlayerMap[num] : null;
-            const isOwn = activePlayerSlices.includes(num);
+            const isOwn = Array.isArray(activePlayerSlices) && activePlayerSlices.includes(num);
             const numColor = playerInfo ? playerInfo.color : '#ffffff';
 
             return (
@@ -357,7 +357,7 @@ export default function InteractiveDartboard({
                       color: sectorPlayerMap?.[zoomedSector] ? sectorPlayerMap[zoomedSector].color : '#94a3b8'
                     }}
                   >
-                    {activePlayerSlices.includes(zoomedSector)
+                    {Array.isArray(activePlayerSlices) && activePlayerSlices.includes(zoomedSector)
                       ? '⭐ Your Sector'
                       : sectorPlayerMap?.[zoomedSector]
                         ? `🎯 ${sectorPlayerMap[zoomedSector].playerName}`

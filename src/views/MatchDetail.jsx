@@ -32,12 +32,13 @@ export default function MatchDetail({ matches, players }) {
     let pHigh = -1;
     let pHighId = null;
 
-    if (match.turns) {
-      match.turns.sort((a,b) => a.timestamp - b.timestamp).forEach((t, index) => {
-         if (!t.isBust) {
-           currentScores[t.playerId] = Math.max(0, currentScores[t.playerId] - t.score);
-           if (t.score > pHigh) {
-             pHigh = t.score;
+    if (match.turns && Array.isArray(match.turns)) {
+      match.turns.filter(Boolean).sort((a,b) => (a.timestamp || 0) - (b.timestamp || 0)).forEach((t, index) => {
+         const scoreVal = typeof t.score === 'number' ? t.score : 0;
+         if (!t.isBust && t.playerId) {
+           currentScores[t.playerId] = Math.max(0, (currentScores[t.playerId] || 0) - scoreVal);
+           if (scoreVal > pHigh) {
+             pHigh = scoreVal;
              pHighId = t.playerId;
            }
          }
@@ -63,13 +64,14 @@ export default function MatchDetail({ matches, players }) {
     const pList = pIds.map(resolvePlayer).filter(Boolean);
 
     const pStats = pList.map((p, i) => {
-      const pTurns = (match.turns || []).filter(t => t.playerId === p.id && !t.isBust);
-      const totalScore = pTurns.reduce((sum, t) => sum + t.score, 0);
+      const pTurns = (match.turns || []).filter(t => t && t.playerId === p.id && !t.isBust);
+      const totalScore = pTurns.reduce((sum, t) => sum + (typeof t.score === 'number' ? t.score : 0), 0);
       const avg = pTurns.length > 0 ? (totalScore / pTurns.length).toFixed(1) : '0.0';
-      const high = pTurns.length > 0 ? Math.max(...pTurns.map(t => t.score)) : 0;
+      const validScores = pTurns.map(t => typeof t.score === 'number' ? t.score : 0);
+      const high = validScores.length > 0 ? Math.max(...validScores) : 0;
       
       const firstThreeTurns = pTurns.slice(0, 3);
-      const nineDartSum = firstThreeTurns.reduce((sum, t) => sum + t.score, 0);
+      const nineDartSum = firstThreeTurns.reduce((sum, t) => sum + (typeof t.score === 'number' ? t.score : 0), 0);
       const avg9 = (nineDartSum / 3).toFixed(1);
 
       return {
@@ -126,7 +128,7 @@ export default function MatchDetail({ matches, players }) {
               {participantList.map((p, i) => (
                 <div key={p.id} className="flex items-center gap-1.5 bg-[#0a0e17] px-2.5 py-1 rounded-lg border border-white/5">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: STROKE_COLORS[i % STROKE_COLORS.length] }} />
-                  <span className="text-xs font-bold text-slate-300">{p.name.split(' ')[0]}</span>
+                  <span className="text-xs font-bold text-slate-300">{p?.name ? p.name.split(' ')[0] : 'Player'}</span>
                 </div>
               ))}
             </div>

@@ -65,9 +65,9 @@ export default function KillerBoard({
     }
   };
 
-  // Smart Mini-Zoom Transform Calculation
+  // Smart Mini-Zoom Transform Calculation: perfectly centers target sectors with 100% visibility of double ring
   const zoomTransform = useMemo(() => {
-    if (!isZoomEnabled || !targetSlices || targetSlices.length === 0) {
+    if (!isZoomEnabled || !Array.isArray(targetSlices) || targetSlices.length === 0) {
       return 'translate(0px, 0px) scale(1)';
     }
 
@@ -92,17 +92,18 @@ export default function KillerBoard({
     }
 
     const angle = Math.atan2(sumY, sumX);
-    // Focus radius in middle of single beds
+    // Midpoint radius of single beds (center of target wedge)
     const R_FOCUS = 95;
     const fx = R_FOCUS * Math.cos(angle);
     const fy = R_FOCUS * Math.sin(angle);
 
-    // Mini-zoom scale: 1.4x enlarges target slices by 40% without losing board context
-    const scale = 1.4;
-    const tx = -fx * (scale - 1) * 0.85;
-    const ty = -fy * (scale - 1) * 0.85;
+    // Mini-zoom scale: 1.35x enlarges targets while translation brings them dead-center
+    // Double ring (R=172) transforms to 172 * 1.35 - 95 * 1.05 = ~132px (fully inside 200px boundary)
+    const scale = 1.35;
+    const tx = -fx * 1.05;
+    const ty = -fy * 1.05;
 
-    return `translate(${tx}px, ${ty}px) scale(${scale})`;
+    return `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) scale(${scale})`;
   }, [isZoomEnabled, targetSlices]);
 
   return (
@@ -114,7 +115,7 @@ export default function KillerBoard({
         title={isZoomEnabled ? "Reset to full board" : "Enable target mini-zoom"}
       >
         {isZoomEnabled ? <ZoomOut className="w-3 h-3 text-[#00f0a8]" /> : <ZoomIn className="w-3 h-3 text-slate-400" />}
-        <span>{isZoomEnabled ? 'Zoom: 1.4x' : 'Full Board'}</span>
+        <span>{isZoomEnabled ? 'Target Zoom' : 'Full Board'}</span>
       </button>
 
       {/* SVG Board */}
@@ -145,8 +146,8 @@ export default function KillerBoard({
           const midAngle = idx * 18;
           const isEven = idx % 2 === 0;
 
-          const player = sectorPlayerMap[num];
-          const isOwn = activePlayerSlices.includes(num);
+          const player = sectorPlayerMap ? sectorPlayerMap[num] : null;
+          const isOwn = Array.isArray(activePlayerSlices) && activePlayerSlices.includes(num);
           const isOpponentTarget = canAttack && player && player.playerId !== activePlayerId && !player.isEliminated;
           const isOwnTarget = !isKiller && isOwn;
 

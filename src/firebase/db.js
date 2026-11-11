@@ -131,12 +131,12 @@ export const submitMatchData = async (winnerId, participantIds, bestScores, turn
         newBestScore = bestScores[pId];
       }
 
-      // Check for Highest Checkout in this match
-      if (turns && turns.length > 0) {
+      // Check for Highest Checkout in this match (X01 games only)
+      if (gameMode !== 'killer' && turns && turns.length > 0 && typeof startingScore === 'number' && startingScore > 0) {
         let currentTotal = startingScore;
-        const playerTurns = turns.filter(t => t.playerId === pId);
+        const playerTurns = turns.filter(t => t && t.playerId === pId);
         playerTurns.forEach(t => {
-           if (!t.isBust) {
+           if (!t.isBust && typeof t.score === 'number') {
               currentTotal -= t.score;
               if (currentTotal === 0) {
                  if (t.score > newHighestCheckout) {
