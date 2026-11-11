@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { 
   Play, ChevronLeft, ChevronRight, Users, Shield, Target, 
-  Skull, Flame, AlertTriangle, Dices, Check, Heart
+  Skull, Flame, AlertTriangle, Dices, Check, Heart, Compass, Clock
 } from 'lucide-react';
 import DartFlowHeader from '../../components/DartFlowHeader';
 import { 
@@ -41,23 +41,28 @@ export default function Setup() {
   const [multipliersCount, setMultipliersCount] = useState(true);
   const [randomSeed, setRandomSeed] = useState(0);
 
-  if (!selectedPlayers || selectedPlayers.length === 0) {
-    return <Navigate to="/game" />;
-  }
-
-  const isFourPlayers = selectedPlayers.length === 4;
+  const playerList = selectedPlayers || [];
+  const isFourPlayers = playerList.length === 4;
   const currentDiffObj = KILLER_DIFFICULTIES.find(d => d.id === killerDifficulty) || KILLER_DIFFICULTIES[0];
   const slicesPerPlayer = currentDiffObj.slices;
+  const totalSlicesNeeded = playerList.length * slicesPerPlayer;
 
   // Killer board capacity checks
-  const totalSlicesNeeded = selectedPlayers.length * slicesPerPlayer;
-  const isOverfilled = isBoardOverfilled(selectedPlayers.length, slicesPerPlayer);
-  const maxAllowedForCurrent = getMaxPlayersForSlices(slicesPerPlayer);
+  const isOverfilled = isBoardOverfilled(playerList.length, slicesPerPlayer);
 
   // Computed random slice assignments (adjacent for each player, scattered across the board)
   const playerSliceAssignments = useMemo(() => {
-    return assignRandomAdjacentSlices(selectedPlayers, slicesPerPlayer);
-  }, [selectedPlayers, slicesPerPlayer, randomSeed]);
+    return assignRandomAdjacentSlices(playerList, slicesPerPlayer);
+  }, [playerList, slicesPerPlayer, randomSeed]);
+
+  // Reset scroll to top on mount (especially for Safari / mobile browsers)
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  if (!selectedPlayers || selectedPlayers.length === 0) {
+    return <Navigate to="/game" />;
+  }
 
   const handleRerollSlices = () => {
     setRandomSeed(s => s + 1);
@@ -81,6 +86,26 @@ export default function Setup() {
             multipliersCount,
             playerSlices: playerSliceAssignments
           }
+        }
+      });
+      return;
+    }
+
+    if (gameMode === 'cricket') {
+      navigate('/game/play', {
+        state: {
+          gameMode: 'cricket',
+          selectedPlayers: shuffledPlayers
+        }
+      });
+      return;
+    }
+
+    if (gameMode === 'around_the_clock') {
+      navigate('/game/play', {
+        state: {
+          gameMode: 'around_the_clock',
+          selectedPlayers: shuffledPlayers
         }
       });
       return;
@@ -116,7 +141,7 @@ export default function Setup() {
             <p className="text-slate-400 text-xs mt-1 font-medium">Choose game mode & configure rules</p>
           </div>
 
-          {/* Game Mode Selector (Classic X01 vs Killer) */}
+          {/* Game Mode Selector (Classic X01, Killer, Cricket, Around the Clock) */}
           <div className="flex flex-col gap-2">
             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider pl-1">
               Select Game Mode
@@ -125,37 +150,73 @@ export default function Setup() {
               <button
                 type="button"
                 onClick={() => setGameMode('x01')}
-                className={`p-3.5 rounded-2xl flex flex-col items-center text-center border-2 transition-all cursor-pointer ${
+                className={`p-3 rounded-2xl flex flex-col items-center text-center border-2 transition-all cursor-pointer ${
                   gameMode === 'x01'
                     ? 'bg-[#122421] border-[#00f0a8] shadow-[0_0_20px_rgba(0,240,168,0.25)]'
                     : 'bg-[#131b2a] border-white/10 hover:border-white/20 opacity-70 hover:opacity-100'
                 }`}
               >
-                <div className={`w-10 h-10 rounded-xl mb-2 flex items-center justify-center ${
+                <div className={`w-9 h-9 rounded-xl mb-1.5 flex items-center justify-center ${
                   gameMode === 'x01' ? 'bg-[#00f0a8] text-[#0a0e17]' : 'bg-white/5 text-slate-400'
                 }`}>
-                  <Target className="w-5 h-5" />
+                  <Target className="w-4 h-4" />
                 </div>
-                <span className="font-black text-sm text-white">Classic X01</span>
-                <span className="text-[10px] text-slate-400 mt-0.5">301 / 501 / 701</span>
+                <span className="font-black text-xs text-white">Classic X01</span>
+                <span className="text-[9px] text-slate-400 mt-0.5">301 / 501 / 701</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setGameMode('killer')}
-                className={`p-3.5 rounded-2xl flex flex-col items-center text-center border-2 transition-all cursor-pointer ${
+                className={`p-3 rounded-2xl flex flex-col items-center text-center border-2 transition-all cursor-pointer ${
                   gameMode === 'killer'
                     ? 'bg-[#291018] border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.3)]'
                     : 'bg-[#131b2a] border-white/10 hover:border-white/20 opacity-70 hover:opacity-100'
                 }`}
               >
-                <div className={`w-10 h-10 rounded-xl mb-2 flex items-center justify-center ${
+                <div className={`w-9 h-9 rounded-xl mb-1.5 flex items-center justify-center ${
                   gameMode === 'killer' ? 'bg-rose-500 text-white' : 'bg-white/5 text-slate-400'
                 }`}>
-                  <Skull className="w-5 h-5" />
+                  <Skull className="w-4 h-4" />
                 </div>
-                <span className="font-black text-sm text-white">Killer</span>
-                <span className="text-[10px] text-rose-300/80 mt-0.5">Hearts & Survival</span>
+                <span className="font-black text-xs text-white">Killer</span>
+                <span className="text-[9px] text-rose-300/80 mt-0.5">Hearts & Survival</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setGameMode('cricket')}
+                className={`p-3 rounded-2xl flex flex-col items-center text-center border-2 transition-all cursor-pointer ${
+                  gameMode === 'cricket'
+                    ? 'bg-[#291e10] border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.3)]'
+                    : 'bg-[#131b2a] border-white/10 hover:border-white/20 opacity-70 hover:opacity-100'
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl mb-1.5 flex items-center justify-center ${
+                  gameMode === 'cricket' ? 'bg-amber-500 text-slate-950' : 'bg-white/5 text-slate-400'
+                }`}>
+                  <Flame className="w-4 h-4" />
+                </div>
+                <span className="font-black text-xs text-white">Cricket</span>
+                <span className="text-[9px] text-amber-300/80 mt-0.5">15-20 & Bull</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setGameMode('around_the_clock')}
+                className={`p-3 rounded-2xl flex flex-col items-center text-center border-2 transition-all cursor-pointer ${
+                  gameMode === 'around_the_clock'
+                    ? 'bg-[#0e222b] border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)]'
+                    : 'bg-[#131b2a] border-white/10 hover:border-white/20 opacity-70 hover:opacity-100'
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl mb-1.5 flex items-center justify-center ${
+                  gameMode === 'around_the_clock' ? 'bg-cyan-400 text-slate-950' : 'bg-white/5 text-slate-400'
+                }`}>
+                  <Compass className="w-4 h-4" />
+                </div>
+                <span className="font-black text-xs text-white">Around Clock</span>
+                <span className="text-[9px] text-cyan-300/80 mt-0.5">1 to 20 + Bull</span>
               </button>
             </div>
           </div>
@@ -224,7 +285,7 @@ export default function Setup() {
           </div>
 
           {/* KILLER CONFIGURATION */}
-          {gameMode === 'killer' ? (
+          {gameMode === 'killer' && (
             <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-top-2">
               
               {/* Difficulty: 3 numbers, 2 numbers, 1 number */}
@@ -354,8 +415,41 @@ export default function Setup() {
               </div>
 
             </div>
-          ) : (
-            /* CLASSIC X01 CONFIGURATION */
+          )}
+
+          {/* CRICKET CONFIGURATION */}
+          {gameMode === 'cricket' && (
+            <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-2">
+              <div className="bg-[#19150e] border border-amber-500/25 rounded-2xl p-4 flex flex-col gap-2.5 text-xs text-amber-200/90 leading-relaxed shadow-lg">
+                <div className="flex items-center gap-2 font-black text-amber-300 uppercase tracking-wider text-sm">
+                  <Flame className="w-4 h-4 text-amber-400" />
+                  <span>Cricket Rules Quick Reference</span>
+                </div>
+                <p>• Targets: <strong>15, 16, 17, 18, 19, 20, and Bullseye</strong>.</p>
+                <p>• Hit a target <strong>3 times</strong> to close it (Single = 1, Double = 2, Triple = 3).</p>
+                <p>• Once you close a number, subsequent hits score points until all opponents have also closed it.</p>
+                <p>• Winner is the first player to close all numbers with an equal or higher score!</p>
+              </div>
+            </div>
+          )}
+
+          {/* AROUND THE CLOCK CONFIGURATION */}
+          {gameMode === 'around_the_clock' && (
+            <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-2">
+              <div className="bg-[#0b171c] border border-cyan-500/25 rounded-2xl p-4 flex flex-col gap-2.5 text-xs text-cyan-200/90 leading-relaxed shadow-lg">
+                <div className="flex items-center gap-2 font-black text-cyan-300 uppercase tracking-wider text-sm">
+                  <Compass className="w-4 h-4 text-cyan-400" />
+                  <span>Around the Clock ("Jorden Runt")</span>
+                </div>
+                <p>• Players start at <strong>Target 1</strong> and race sequentially through <strong>20, ending at Bull</strong>.</p>
+                <p>• <strong>Bonus Skips:</strong> Hitting a Double advances 2 targets (+2), Triple advances 3 (+3)!</p>
+                <p>• First player to complete target 20 and Bullseye wins the match!</p>
+              </div>
+            </div>
+          )}
+
+          {/* CLASSIC X01 CONFIGURATION */}
+          {gameMode === 'x01' && (
             <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-top-2">
               {/* Select Game / Starting Score */}
               <div className="flex flex-col gap-2.5">
@@ -496,7 +590,11 @@ export default function Setup() {
                 ? 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none border border-white/5'
                 : gameMode === 'killer'
                   ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-[0_0_25px_rgba(244,63,94,0.4)]'
-                  : 'bg-[#00f0a8] hover:bg-[#00d694] text-[#0a0e17] shadow-[0_0_25px_rgba(0,240,168,0.4)]'
+                  : gameMode === 'cricket'
+                    ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-[0_0_25px_rgba(245,158,11,0.4)]'
+                    : gameMode === 'around_the_clock'
+                      ? 'bg-cyan-400 hover:bg-cyan-300 text-slate-950 shadow-[0_0_25px_rgba(6,182,212,0.4)]'
+                      : 'bg-[#00f0a8] hover:bg-[#00d694] text-[#0a0e17] shadow-[0_0_25px_rgba(0,240,168,0.4)]'
             }`}
           >
             {gameMode === 'killer' ? (
@@ -504,10 +602,20 @@ export default function Setup() {
                 <Skull className="w-5 h-5 fill-current" />
                 <span>{isOverfilled ? 'Overfilled - Lower Slices' : 'Start Killer Match'}</span>
               </>
+            ) : gameMode === 'cricket' ? (
+              <>
+                <Flame className="w-5 h-5 fill-current" />
+                <span>Start Cricket Match</span>
+              </>
+            ) : gameMode === 'around_the_clock' ? (
+              <>
+                <Compass className="w-5 h-5 fill-current" />
+                <span>Start Around The Clock</span>
+              </>
             ) : (
               <>
                 <Play className="w-5 h-5 fill-current" />
-                <span>Start Game</span>
+                <span>Start Match</span>
               </>
             )}
           </button>

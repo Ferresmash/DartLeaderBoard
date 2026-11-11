@@ -70,6 +70,11 @@ export default function Lobby({ players }) {
   const handleNext = () => {
     if (selectedIds.length === 0 && customGuests.length === 0) return;
     const selectedPlayers = players.filter(p => selectedIds.includes(p.id)).concat(customGuests);
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    } catch (_) {
+      window.scrollTo(0, 0);
+    }
     navigate('/game/setup', { state: { selectedPlayers } });
   };
 

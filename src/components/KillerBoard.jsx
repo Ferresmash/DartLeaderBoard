@@ -86,22 +86,34 @@ export default function KillerBoard({
       }
     });
 
-    if (count === 0 || (Math.abs(sumX) < 0.05 && Math.abs(sumY) < 0.05)) {
-      // Symmetrically distributed across entire board
-      return 'translate(0px, 0px) scale(1.15)';
+    if (count === 0) {
+      return 'translate(0px, 0px) scale(1)';
     }
 
-    const angle = Math.atan2(sumY, sumX);
-    // Midpoint radius of single beds (center of target wedge)
-    const R_FOCUS = 95;
-    const fx = R_FOCUS * Math.cos(angle);
-    const fy = R_FOCUS * Math.sin(angle);
+    // Check dispersion: if multiple slices are spread around different sides of the board,
+    // do not zoom in on one direction; keep full board visible so all targets can be seen!
+    const vectorLength = Math.sqrt(sumX * sumX + sumY * sumY) / count;
+    if (count > 1 && vectorLength < 0.75) {
+      return 'translate(0px, 0px) scale(1)';
+    }
 
-    // Mini-zoom scale: 1.35x enlarges targets while translation brings them dead-center
-    // Double ring (R=172) transforms to 172 * 1.35 - 95 * 1.05 = ~132px (fully inside 200px boundary)
-    const scale = 1.35;
-    const tx = -fx * 1.05;
-    const ty = -fy * 1.05;
+    if (Math.abs(sumX) < 0.05 && Math.abs(sumY) < 0.05) {
+      return 'translate(0px, 0px) scale(1)';
+    }
+
+    const midAngle = Math.atan2(sumY, sumX);
+    // Focus radius in middle of active scoring zone (between inner bull R30 and double wire R172)
+    const R_FOCUS = 102;
+    const fx = R_FOCUS * Math.cos(midAngle);
+    const fy = R_FOCUS * Math.sin(midAngle);
+
+    // Dynamic scale depending on how many slices to frame (1 slice = 1.55x, 2 slices = 1.42x, 3 slices = 1.32x)
+    const scale = count === 1 ? 1.55 : count === 2 ? 1.42 : 1.32;
+    
+    // Shift focal point between the slices directly toward center so double ring and single beds are fully visible
+    const offsetRatio = 0.25;
+    const tx = -fx * (scale - offsetRatio);
+    const ty = -fy * (scale - offsetRatio);
 
     return `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) scale(${scale})`;
   }, [isZoomEnabled, targetSlices]);

@@ -1,9 +1,16 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Home, UserPlus, User, Target, History, BarChart3 } from 'lucide-react';
 import DartFlowLogo from './DartFlowLogo';
 import clsx from 'clsx';
 
 export default function Navigation() {
+  const location = useLocation();
+  const isGameActive = location.pathname.startsWith('/game/play');
+
+  if (isGameActive) {
+    return null;
+  }
+
   const navItems = [
     { to: '/', icon: Home, label: 'Table' },
     { to: '/matches', icon: History, label: 'Matches' },

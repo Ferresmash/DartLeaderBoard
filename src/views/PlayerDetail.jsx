@@ -22,6 +22,8 @@ export default function PlayerDetail({ players, matches }) {
     return idx >= 0 ? idx + 1 : '-';
   }, [players, id]);
 
+  const isX01Match = (m) => m.gameMode === 'x01' || (!m.gameMode && m.startingScore !== 'Killer' && m.startingScore !== 'Cricket' && m.startingScore !== 'Around the Clock' && typeof m.startingScore === 'number');
+
   // Lifetime Stats
   const lifetimeStats = useMemo(() => {
     if (!player) return { highestCheckout: 0, avgNineDarts: 0, bustPct: 0, avgScore: 0, count180s: 0, count100plus: 0 };
@@ -34,33 +36,39 @@ export default function PlayerDetail({ players, matches }) {
     let count180s = 0;
     let count100plus = 0;
 
-    matches.forEach(m => {
+    matches.filter(isX01Match).forEach(m => {
       if (!m.turns) return;
-      const playerTurns = m.turns.filter(t => t.playerId === player.id);
+      const playerTurns = m.turns.filter(t => t && t.playerId === player.id);
       if (playerTurns.length === 0) return;
 
-      const firstThree = playerTurns.slice(0, 3);
-      nineDartTotals.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
+      const validPTurns = playerTurns.filter(t => typeof t.score === 'number' && !isNaN(t.score));
+      if (validPTurns.length > 0) {
+        const firstThree = validPTurns.slice(0, 3);
+        nineDartTotals.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
+      }
 
-      let running = m.startingScore || 501;
+      const starting = typeof m.startingScore === 'number' ? m.startingScore : 501;
+      let running = starting;
       playerTurns.forEach(t => {
-        lifetimeTotalThrows++;
-        if (t.isBust) {
-          lifetimeBusts++;
-          return;
-        }
-        validThrows++;
-        totalScore += t.score;
-        if (t.score === 180) count180s++;
-        if (t.score >= 100) count100plus++;
+        if (typeof t.score === 'number' && !isNaN(t.score)) {
+          lifetimeTotalThrows++;
+          if (t.isBust) {
+            lifetimeBusts++;
+            return;
+          }
+          validThrows++;
+          totalScore += t.score;
+          if (t.score === 180) count180s++;
+          if (t.score >= 100) count100plus++;
 
-        running -= t.score;
-        if (running === 0) {
-          if (t.score > highestCheckout) highestCheckout = t.score;
-          running = m.startingScore || 501;
-        }
-        if (running < 0) {
-          running += t.score;
+          running -= t.score;
+          if (running === 0) {
+            if (t.score > highestCheckout) highestCheckout = t.score;
+            running = starting;
+          }
+          if (running < 0) {
+            running += t.score;
+          }
         }
       });
     });
@@ -111,7 +119,9 @@ export default function PlayerDetail({ players, matches }) {
     }
 
     periods.forEach(period => {
-      const periodMatches = matches.filter(m => m.timestamp >= period.start && m.timestamp < period.end);
+      const periodMatches = matches
+        .filter(isX01Match)
+        .filter(m => m.timestamp >= period.start && m.timestamp < period.end);
       
       const gamesPlayed = periodMatches.filter(m => 
         (m.participantIds && m.participantIds.includes(player.id)) || 
@@ -130,26 +140,30 @@ export default function PlayerDetail({ players, matches }) {
 
       periodMatches.forEach(m => {
         if (m.turns) {
-          const playerTurns = m.turns.filter(t => t.playerId === player.id);
+          const playerTurns = m.turns.filter(t => t && t.playerId === player.id);
+          const validPTurns = playerTurns.filter(t => typeof t.score === 'number' && !isNaN(t.score));
           
-          if (playerTurns.length > 0) {
-             const firstThree = playerTurns.slice(0, 3);
-             nineDartTotals.push(firstThree.reduce((acc, t) => acc + t.score, 0));
+          if (validPTurns.length > 0) {
+             const firstThree = validPTurns.slice(0, 3);
+             nineDartTotals.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
           }
 
-          let currentTotal = m.startingScore || 501;
+          const starting = typeof m.startingScore === 'number' ? m.startingScore : 501;
+          let currentTotal = starting;
           playerTurns.forEach(t => {
-            if (!t.isBust) {
-              validThrows++;
-              totalThrowScore += t.score;
-              currentTotal -= t.score;
-              if (currentTotal === 0 && t.score > highestCheckout) {
-                highestCheckout = t.score;
+            if (typeof t.score === 'number' && !isNaN(t.score)) {
+              if (!t.isBust) {
+                validThrows++;
+                totalThrowScore += t.score;
+                currentTotal -= t.score;
+                if (currentTotal === 0 && t.score > highestCheckout) {
+                  highestCheckout = t.score;
+                }
+                if (currentTotal === 0) currentTotal = starting;
               }
-              if (currentTotal === 0) currentTotal = m.startingScore || 501;
+              totalThrowsCount++;
+              if (t.isBust) bustCount++;
             }
-            totalThrowsCount++;
-            if (t.isBust) bustCount++;
           });
         }
       });
