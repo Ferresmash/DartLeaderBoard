@@ -5,6 +5,7 @@ import {
   Skull, Flame, AlertTriangle, Dices, Check, Heart, Compass, Clock
 } from 'lucide-react';
 import DartFlowHeader from '../../components/DartFlowHeader';
+import clsx from 'clsx';
 import { 
   PLAYER_THEMES,
   KILLER_DIFFICULTIES,
@@ -40,6 +41,9 @@ export default function Setup() {
   const [killerDifficulty, setKillerDifficulty] = useState('hard');
   const [multipliersCount, setMultipliersCount] = useState(true);
   const [randomSeed, setRandomSeed] = useState(0);
+
+  // Cricket settings - Default is 10 rounds standard
+  const [cricketMaxRounds, setCricketMaxRounds] = useState(10);
 
   const playerList = selectedPlayers || [];
   const isFourPlayers = playerList.length === 4;
@@ -92,10 +96,12 @@ export default function Setup() {
     }
 
     if (gameMode === 'cricket') {
+      localStorage.removeItem('activeCricketGame');
       navigate('/game/play', {
         state: {
           gameMode: 'cricket',
-          selectedPlayers: shuffledPlayers
+          selectedPlayers: shuffledPlayers,
+          maxRounds: cricketMaxRounds
         }
       });
       return;
@@ -429,6 +435,41 @@ export default function Setup() {
                 <p>• Hit a target <strong>3 times</strong> to close it (Single = 1, Double = 2, Triple = 3).</p>
                 <p>• Once you close a number, subsequent hits score points until all opponents have also closed it.</p>
                 <p>• Winner is the first player to close all numbers with an equal or higher score!</p>
+              </div>
+
+              {/* Round Limit Selector */}
+              <div className="flex flex-col gap-2 bg-[#121927] border border-white/10 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase text-amber-300 tracking-wider">Round Limit</span>
+                  <span className="text-xs font-bold text-slate-400">
+                    {cricketMaxRounds === 0 ? 'No Limit' : `${cricketMaxRounds} Rounds`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2 mt-1">
+                  {[
+                    { value: 10, label: '10 (Std)' },
+                    { value: 15, label: '15' },
+                    { value: 20, label: '20' },
+                    { value: 0, label: 'No Limit' }
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setCricketMaxRounds(opt.value)}
+                      className={clsx(
+                        "py-2.5 rounded-xl text-xs font-black transition-all border cursor-pointer",
+                        cricketMaxRounds === opt.value
+                          ? "bg-amber-500 text-slate-950 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                          : "bg-[#162030] text-slate-400 border-white/5 hover:text-white"
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                  If targets aren't all closed before the limit, the player with highest points wins.
+                </p>
               </div>
             </div>
           )}

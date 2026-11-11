@@ -40,10 +40,19 @@ export default function CricketPlay({ onMatchComplete }) {
 
   const [activeIdx, setActiveIdx] = useState(isNewGame ? 0 : savedGame?.activeIdx || 0);
   const [turnDarts, setTurnDarts] = useState(isNewGame ? [] : savedGame?.turnDarts || []);
-  const [historyStack, setHistoryStack] = useState(isNewGame ? [] : savedGame?.historyStack || []);
+  const [historyStack, setHistoryStack] = useState([]);
   const [turnHistory, setTurnHistory] = useState(isNewGame ? [] : savedGame?.turnHistory || []);
   const [multiplier, setMultiplier] = useState(1); // 1, 2, 3
   const [inputMethod, setInputMethod] = useState(() => localStorage.getItem('cricket_input_method') || 'keypad');
+
+  const [maxRounds, setMaxRounds] = useState(() => {
+    if (isNewGame) {
+      return location.state?.maxRounds !== undefined ? location.state.maxRounds : 10;
+    }
+    return savedGame?.maxRounds !== undefined ? savedGame.maxRounds : 10;
+  });
+  const [currentRound, setCurrentRound] = useState(isNewGame ? 1 : savedGame?.currentRound || 1);
+  const [winReason, setWinReason] = useState(savedGame?.winReason || null);
 
   const [winner, setWinner] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,18 +62,24 @@ export default function CricketPlay({ onMatchComplete }) {
 
   const autoAdvanceTimerRef = useRef(null);
 
-  // Persist game state
+  // Persist game state safely (no historyStack in localStorage to prevent QuotaExceeded crashes)
   useEffect(() => {
     if (players.length > 0 && !isSaving && !winner) {
-      localStorage.setItem('activeCricketGame', JSON.stringify({
-        players,
-        activeIdx,
-        turnDarts,
-        historyStack,
-        turnHistory
-      }));
+      try {
+        localStorage.setItem('activeCricketGame', JSON.stringify({
+          players,
+          activeIdx,
+          turnDarts,
+          turnHistory,
+          maxRounds,
+          currentRound,
+          winReason
+        }));
+      } catch (err) {
+        console.warn('Cricket localStorage save warning:', err);
+      }
     }
-  }, [players, activeIdx, turnDarts, historyStack, turnHistory, isSaving, winner]);
+  }, [players, activeIdx, turnDarts, turnHistory, maxRounds, currentRound, winReason, isSaving, winner]);
 
   // Cleanup timer
   useEffect(() => {
@@ -100,6 +115,7 @@ export default function CricketPlay({ onMatchComplete }) {
   };
 
   const advanceToNextPlayer = (updatedPlayers, currentIdx, completedDarts) => {
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
     const nextPlayers = JSON.parse(JSON.stringify(updatedPlayers));
     const curr = nextPlayers[currentIdx];
 
@@ -114,13 +130,36 @@ export default function CricketPlay({ onMatchComplete }) {
       }
     ]);
 
-    // Check win condition
+    // Check normal win condition (closed all targets and points >= rivals)
     const matchWinner = checkCricketWinner(nextPlayers);
     if (matchWinner) {
       setWinner(matchWinner);
+      setWinReason('closed_all');
       setPlayers(nextPlayers);
       handleMatchWin(matchWinner, nextPlayers);
       return;
+    }
+
+    const isRoundEnd = currentIdx === nextPlayers.length - 1;
+    if (isRoundEnd && maxRounds > 0 && currentRound >= maxRounds) {
+      // Round limit reached at end of the round! Highest points wins
+      const sorted = [...nextPlayers].sort((a, b) => {
+        const scoreDiff = (b.cricketScore || 0) - (a.cricketScore || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        const aMarks = Object.values(a.cricketMarks || {}).reduce((sum, m) => sum + (m || 0), 0);
+        const bMarks = Object.values(b.cricketMarks || {}).reduce((sum, m) => sum + (m || 0), 0);
+        return bMarks - aMarks;
+      });
+      const limitWinner = sorted[0];
+      setWinner(limitWinner);
+      setWinReason('round_limit');
+      setPlayers(nextPlayers);
+      handleMatchWin(limitWinner, nextPlayers);
+      return;
+    }
+
+    if (isRoundEnd) {
+      setCurrentRound(r => r + 1);
     }
 
     const nextIdx = (currentIdx + 1) % nextPlayers.length;
@@ -132,15 +171,16 @@ export default function CricketPlay({ onMatchComplete }) {
 
   const registerDart = (targetNumber, mult = 1) => {
     if (turnDarts.length >= 3 || winner || isSaving) return;
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
 
-    // Snapshot for Undo
+    // Snapshot for Undo (cap at 10 to prevent memory/storage issues)
     const snapshot = {
       players: JSON.parse(JSON.stringify(players)),
       activeIdx,
       turnDarts: [...turnDarts],
-      turnHistory: [...turnHistory]
+      currentRound
     };
-    setHistoryStack(prev => [...prev, snapshot]);
+    setHistoryStack(prev => [...prev.slice(-9), snapshot]);
 
     const updatedPlayers = JSON.parse(JSON.stringify(players));
     const curr = updatedPlayers[activeIdx];
@@ -195,6 +235,7 @@ export default function CricketPlay({ onMatchComplete }) {
     const matchWinner = checkCricketWinner(updatedPlayers);
     if (matchWinner) {
       setWinner(matchWinner);
+      setWinReason('closed_all');
       handleMatchWin(matchWinner, updatedPlayers);
       return;
     }
@@ -215,9 +256,10 @@ export default function CricketPlay({ onMatchComplete }) {
     setPlayers(lastSnap.players);
     setActiveIdx(lastSnap.activeIdx);
     setTurnDarts(lastSnap.turnDarts);
-    setTurnHistory(lastSnap.turnHistory);
+    if (lastSnap.currentRound !== undefined) setCurrentRound(lastSnap.currentRound);
     setHistoryStack(prev => prev.slice(0, -1));
     setWinner(null);
+    setWinReason(null);
     setToastMessage('Undone');
     setTimeout(() => setToastMessage(null), 1000);
   };
@@ -254,13 +296,16 @@ export default function CricketPlay({ onMatchComplete }) {
         </div>
 
         <span className="text-xs font-black tracking-widest uppercase text-amber-400 mb-1">
-          Cricket Champion!
+          {winReason === 'round_limit' ? 'Round Limit Reached!' : 'Cricket Champion!'}
         </span>
         <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-2">
           {finalWinner.name}
         </h1>
         <p className="text-slate-400 text-sm font-semibold mb-2">
-          Final Score: <span className="text-[#00f0a8] font-black">{finalWinner.cricketScore || 0} pts</span>
+          {winReason === 'round_limit' 
+            ? `Highest Score at Round ${maxRounds}: `
+            : 'Final Score: '}
+          <span className="text-[#00f0a8] font-black">{finalWinner.cricketScore || 0} pts</span>
         </p>
 
         <div className="flex gap-3 mt-6">
@@ -282,7 +327,10 @@ export default function CricketPlay({ onMatchComplete }) {
         showBack
         onBack={() => setShowExitModal(true)}
         rightAction={
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-xl">
+              Round {currentRound}{maxRounds > 0 ? ` / ${maxRounds}` : ''}
+            </span>
             <button
               onClick={handleUndo}
               disabled={historyStack.length === 0}
@@ -326,7 +374,7 @@ export default function CricketPlay({ onMatchComplete }) {
                     <span className={clsx("w-4 h-4 rounded-md font-black text-[10px] flex items-center justify-center shrink-0", theme.badgeBg, theme.badgeText)}>
                       {idx + 1}
                     </span>
-                    <span className="font-extrabold text-white text-xs truncate">{p.name.split(' ')[0]}</span>
+                    <span className="font-extrabold text-white text-xs truncate">{(p.name || 'Player').split(' ')[0]}</span>
                   </div>
                 </div>
 
@@ -365,9 +413,9 @@ export default function CricketPlay({ onMatchComplete }) {
         {/* Cricket Scoreboard Matrix (DartCounter style) */}
         <div className="bg-[#121927] border border-white/10 rounded-2xl p-2.5 shadow-xl flex-1 min-h-[220px] max-h-[38vh] flex flex-col justify-between overflow-y-auto no-scrollbar">
           <div className="grid grid-cols-7 gap-1 text-center border-b border-white/10 pb-1 mb-1 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-            <div className="col-span-3 text-left pl-2">{players[0]?.name.split(' ')[0]}</div>
+            <div className="col-span-3 text-left pl-2">{(players[0]?.name || 'P1').split(' ')[0]}</div>
             <div className="col-span-1 text-center">Target</div>
-            <div className="col-span-3 text-right pr-2">{players[1]?.name.split(' ')[0] || 'P2'}</div>
+            <div className="col-span-3 text-right pr-2">{(players[1]?.name || 'P2').split(' ')[0]}</div>
           </div>
 
           <div className="flex flex-col gap-1 flex-1 justify-around">
@@ -506,7 +554,8 @@ export default function CricketPlay({ onMatchComplete }) {
               <h2 className="text-xl font-black text-white">Settings</h2>
               <button onClick={() => setShowSettingsModal(false)}><X className="w-6 h-6 text-white" /></button>
             </div>
-            <div className="grid grid-cols-2 gap-2 mb-6">
+            <span className="text-xs font-bold uppercase text-slate-400 mb-2 block">Input Method</span>
+            <div className="grid grid-cols-2 gap-2 mb-4">
               <button
                 onClick={() => { setInputMethod('keypad'); localStorage.setItem('cricket_input_method', 'keypad'); }}
                 className={clsx("py-3 rounded-xl font-bold text-xs cursor-pointer", inputMethod === 'keypad' ? 'bg-[#00f0a8] text-[#0a0e17]' : 'bg-[#162030] text-white')}
@@ -519,6 +568,29 @@ export default function CricketPlay({ onMatchComplete }) {
               >
                 Dartboard
               </button>
+            </div>
+
+            <span className="text-xs font-bold uppercase text-slate-400 mb-2 block">Round Limit</span>
+            <div className="grid grid-cols-4 gap-2 mb-6">
+              {[
+                { value: 10, label: '10' },
+                { value: 15, label: '15' },
+                { value: 20, label: '20' },
+                { value: 0, label: 'None' }
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setMaxRounds(opt.value)}
+                  className={clsx(
+                    "py-2 rounded-xl font-bold text-xs cursor-pointer border transition-all",
+                    maxRounds === opt.value
+                      ? "bg-amber-500 text-slate-950 border-amber-400"
+                      : "bg-[#162030] text-slate-400 border-white/5 hover:text-white"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
             <button
               onClick={() => { setShowSettingsModal(false); setShowExitModal(true); }}
