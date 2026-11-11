@@ -62,6 +62,7 @@ export default function KillerPlay({ onMatchComplete }) {
   const [isZoomEnabled, setIsZoomEnabled] = useState(true);
   const [focusedOpponentId, setFocusedOpponentId] = useState(null);
   const [focusedSlice, setFocusedSlice] = useState(null);
+  const [hitDialogSector, setHitDialogSector] = useState(null);
 
   const autoAdvanceTimerRef = useRef(null);
 
@@ -112,6 +113,30 @@ export default function KillerPlay({ onMatchComplete }) {
     }
     return livingOpponents[0]?.assignedSlices || [];
   }, [isEligibleToAttack, activePlayer, livingOpponents, focusedOpponentId, focusedSlice]);
+
+  const targetedOpponent = useMemo(() => {
+    if (!isEligibleToAttack) return null;
+    if (focusedOpponentId) return livingOpponents.find(p => p.id === focusedOpponentId) || livingOpponents[0];
+    return livingOpponents[0] || null;
+  }, [isEligibleToAttack, focusedOpponentId, livingOpponents]);
+
+  const primaryTargetSector = useMemo(() => {
+    if (!isEligibleToAttack) {
+      if (focusedSlice && activePlayer?.assignedSlices?.includes(focusedSlice)) {
+        return focusedSlice;
+      }
+      return activePlayer?.assignedSlices?.[0] || null;
+    }
+    if (targetedOpponent && targetedOpponent.assignedSlices?.length > 0) {
+      return targetedOpponent.assignedSlices[0];
+    }
+    return null;
+  }, [isEligibleToAttack, focusedSlice, activePlayer, targetedOpponent]);
+
+  const targetOpponentForHit = useMemo(() => {
+    if (!hitDialogSector) return null;
+    return players.find(p => p.id !== activePlayer?.id && !p.isEliminated && p.assignedSlices?.includes(hitDialogSector)) || null;
+  }, [hitDialogSector, players, activePlayer]);
 
   if (!isNewGame && !savedGame) {
     return <Navigate to="/game" />;
@@ -652,7 +677,13 @@ export default function KillerPlay({ onMatchComplete }) {
             targetSlices={targetSlices}
             isZoomEnabled={isZoomEnabled}
             onToggleZoom={() => setIsZoomEnabled(z => !z)}
-            onHitSector={handleHitSector}
+            onHitSector={(sec) => {
+              if (sec === 0) {
+                handleHitSector(0, 0);
+              } else {
+                setHitDialogSector(sec);
+              }
+            }}
           />
         </div>
 
@@ -663,38 +694,143 @@ export default function KillerPlay({ onMatchComplete }) {
           </div>
         </div>
 
-        {/* BOTTOM MINIMAL CONTROLS (Miss & Undo) */}
-        <div className="flex items-center justify-between gap-3 pt-1 pb-1">
+        {/* BOTTOM CONTROLS: Miss, Hit (with 1x/2x/3x selector), Undo */}
+        <div className="flex items-center justify-between gap-2.5 pt-1 pb-1">
           <button
             onClick={() => handleHitSector(0, 0)}
             disabled={turnDarts.length >= 3}
-            className="flex-1 py-3 bg-[#131b28] hover:bg-[#1a2538] disabled:opacity-25 active:scale-95 transition-all rounded-2xl border border-white/10 text-slate-300 hover:text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+            className="px-4 py-3 bg-[#131b28] hover:bg-[#1a2538] active:bg-[#202b3d] disabled:opacity-25 rounded-2xl border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] transition-colors duration-75 touch-manipulation select-none"
           >
             <X className="w-4 h-4 text-rose-400" />
-            <span>Miss / Off Board</span>
+            <span>Miss</span>
+          </button>
+
+          <button
+            onClick={() => primaryTargetSector && setHitDialogSector(primaryTargetSector)}
+            disabled={turnDarts.length >= 3 || !primaryTargetSector}
+            className={clsx(
+              "flex-1 py-3 px-3 rounded-2xl font-black text-xs md:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.98] transition-all duration-75 touch-manipulation select-none disabled:opacity-25",
+              isEligibleToAttack
+                ? "bg-rose-500 hover:bg-rose-400 text-white shadow-rose-500/30 border border-rose-400"
+                : "bg-[#00f0a8] hover:bg-[#00d694] text-[#0a0e17] shadow-[#00f0a8]/30 border border-[#00f0a8]"
+            )}
+          >
+            <Target className="w-4 h-4" />
+            <span>
+              {isEligibleToAttack 
+                ? `HIT [${targetedOpponent?.name?.split(' ')[0] || 'Target'}: ${primaryTargetSector}]`
+                : `HIT [Slice ${primaryTargetSector}]`
+              }
+            </span>
           </button>
 
           <button
             onClick={handleUndo}
             disabled={historyStack.length === 0}
-            className="px-4 py-3 bg-[#131b28] hover:bg-[#1a2538] disabled:opacity-25 active:scale-95 transition-all rounded-2xl border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+            className="px-4 py-3 bg-[#131b28] hover:bg-[#1a2538] active:bg-[#202b3d] disabled:opacity-25 rounded-2xl border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer active:scale-[0.98] transition-colors duration-75 touch-manipulation select-none"
             title="Undo"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Undo</span>
           </button>
-
-          {turnDarts.length > 0 && turnDarts.length < 3 && (
-            <button
-              onClick={handlePassTurn}
-              className="py-3 px-3.5 bg-[#00f0a8]/15 hover:bg-[#00f0a8]/25 text-[#00f0a8] border border-[#00f0a8]/30 font-extrabold text-xs rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer"
-            >
-              <span>Pass</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
         </div>
       </div>
+
+      {/* 1x / 2x / 3x Multiplier Selection Sheet */}
+      {hitDialogSector !== null && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 animate-in fade-in duration-150"
+          onClick={() => setHitDialogSector(null)}
+        >
+          <div 
+            className="bg-[#121927] border border-white/15 rounded-3xl p-5 max-w-sm w-full shadow-2xl animate-in slide-in-from-bottom-4 duration-200 select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
+              <div className="flex items-center gap-2">
+                <div className={clsx(
+                  "w-9 h-9 rounded-xl flex items-center justify-center font-black text-base border",
+                  activePlayer.assignedSlices.includes(hitDialogSector)
+                    ? "bg-[#00f0a8]/20 border-[#00f0a8]/50 text-[#00f0a8]"
+                    : "bg-rose-500/20 border-rose-500/50 text-rose-400"
+                )}>
+                  {hitDialogSector}
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white leading-tight">
+                    {activePlayer.assignedSlices.includes(hitDialogSector)
+                      ? "Hit Your Slice!"
+                      : targetOpponentForHit
+                        ? `Attacking ${targetOpponentForHit.name}`
+                        : `Hit Sector ${hitDialogSector}`}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Select dart multiplier
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setHitDialogSector(null)}
+                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* 1x, 2x, 3x Multiplier Buttons */}
+            <div className="grid grid-cols-3 gap-2.5 mb-3">
+              {[
+                { 
+                  mult: 1, 
+                  title: '1x', 
+                  sub: 'Single', 
+                  badge: activePlayer.assignedSlices.includes(hitDialogSector) ? '+1 ❤️' : '-1 ❤️',
+                  color: 'border-white/10 bg-[#172133] hover:border-[#00f0a8]/50 hover:bg-[#1c293f] text-white' 
+                },
+                { 
+                  mult: 2, 
+                  title: '2x', 
+                  sub: 'Double', 
+                  badge: activePlayer.assignedSlices.includes(hitDialogSector) ? '+2 ❤️' : '-2 ❤️',
+                  color: 'border-[#00f0a8]/40 bg-[#0e2723] hover:border-[#00f0a8] text-[#00f0a8]' 
+                },
+                { 
+                  mult: 3, 
+                  title: '3x', 
+                  sub: 'Triple', 
+                  badge: activePlayer.assignedSlices.includes(hitDialogSector) ? '+3 ❤️' : '-3 ❤️',
+                  color: 'border-amber-500/40 bg-[#281d11] hover:border-amber-400 text-amber-300' 
+                }
+              ].map(opt => (
+                <button
+                  key={opt.mult}
+                  onClick={() => {
+                    handleHitSector(hitDialogSector, opt.mult);
+                    setHitDialogSector(null);
+                  }}
+                  className={clsx(
+                    "py-3.5 px-2 rounded-2xl border-2 flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-all cursor-pointer shadow-md",
+                    opt.color
+                  )}
+                >
+                  <span className="text-2xl font-black leading-none">{opt.title}</span>
+                  <span className="text-[11px] font-bold tracking-tight opacity-90">{opt.sub}</span>
+                  <span className="text-[10px] font-black uppercase mt-1 px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10">
+                    {opt.badge}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setHitDialogSector(null)}
+              className="w-full py-2.5 text-center text-xs font-bold text-slate-400 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettingsModal && (
