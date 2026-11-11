@@ -49,6 +49,14 @@ export default function MatchesList({ matches, players }) {
                       <span className="bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-md text-[10px] font-black border border-rose-500/30 flex items-center gap-1">
                         KILLER
                       </span>
+                    ) : match.gameMode === 'cricket' || match.startingScore === 'Cricket' ? (
+                      <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md text-[10px] font-black border border-amber-500/30 flex items-center gap-1">
+                        CRICKET
+                      </span>
+                    ) : match.gameMode === 'around_the_clock' || match.startingScore === 'Around the Clock' ? (
+                      <span className="bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-md text-[10px] font-black border border-cyan-500/30 flex items-center gap-1">
+                        AROUND THE CLOCK
+                      </span>
                     ) : match.startingScore ? (
                       <span className="bg-[#0a0e17] px-2 py-0.5 rounded-md text-[10px] font-black text-[#00f0a8] border border-white/5">
                         {match.startingScore}

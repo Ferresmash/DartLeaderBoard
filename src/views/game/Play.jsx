@@ -6,6 +6,8 @@ import { getCheckout } from '../../utils/checkouts';
 import DartFlowHeader from '../../components/DartFlowHeader';
 import InteractiveDartboard from '../../components/InteractiveDartboard';
 import KillerPlay from './KillerPlay';
+import CricketPlay from './CricketPlay';
+import AroundTheClockPlay from './AroundTheClockPlay';
 import clsx from 'clsx';
 
 const PLAYER_THEMES = [
@@ -110,7 +112,6 @@ const getNextActiveIdx = (currentIdx, isSD, sdPlayers, totalLen) => {
 
 export default function Play({ onMatchComplete }) {
   const location = useLocation();
-  const navigate = useNavigate();
 
   const isKillerMode = 
     location.state?.gameMode === 'killer' || 
@@ -119,6 +120,29 @@ export default function Play({ onMatchComplete }) {
   if (isKillerMode) {
     return <KillerPlay onMatchComplete={onMatchComplete} />;
   }
+
+  const isCricketMode = 
+    location.state?.gameMode === 'cricket' || 
+    (!location.state?.gameMode && !!localStorage.getItem('activeCricketGame') && !localStorage.getItem('activeDartsGame'));
+
+  if (isCricketMode) {
+    return <CricketPlay onMatchComplete={onMatchComplete} />;
+  }
+
+  const isAroundTheClockMode = 
+    location.state?.gameMode === 'around_the_clock' || 
+    (!location.state?.gameMode && !!localStorage.getItem('activeAroundTheClockGame') && !localStorage.getItem('activeDartsGame'));
+
+  if (isAroundTheClockMode) {
+    return <AroundTheClockPlay onMatchComplete={onMatchComplete} />;
+  }
+
+  return <X01Play onMatchComplete={onMatchComplete} />;
+}
+
+function X01Play({ onMatchComplete }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   
   const savedGameStr = localStorage.getItem('activeDartsGame');
   const savedGame = savedGameStr ? JSON.parse(savedGameStr) : null;
@@ -323,8 +347,8 @@ export default function Play({ onMatchComplete }) {
         }
       />
 
-      <div className="flex-1 w-full max-w-lg mx-auto px-4 py-2 flex flex-col justify-between overflow-hidden">
-        <div className={clsx("grid gap-2.5 w-full", inputMethod === 'dartboard' ? "max-h-[30vh]" : "flex-1 max-h-[46vh]", players.length <= 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2")}>
+      <div className="flex-1 w-full max-w-lg mx-auto px-4 py-2 flex flex-col gap-2.5 overflow-hidden">
+        <div className={clsx("grid gap-2.5 w-full", inputMethod === 'dartboard' ? "max-h-[30vh]" : "flex-1 min-h-[140px]", players.length <= 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2")}>
           {players.map((p, i) => {
             const theme = PLAYER_THEMES[i % PLAYER_THEMES.length];
             const isActive = activeIdx === i;
@@ -341,8 +365,8 @@ export default function Play({ onMatchComplete }) {
                         <span className="font-extrabold text-white text-xs truncate">{p?.name ? p.name.split(' ')[0] : 'Player'}</span>
                     </div>
                 </div>
-                <div className="flex flex-col items-center justify-center my-auto">
-                    <span className={clsx("font-black tracking-tight leading-none", inputMethod === 'dartboard' ? "text-3xl" : "text-5xl", isActive ? "text-white" : "text-slate-300")}>{p.currentScore}</span>
+                <div className="flex flex-col items-center justify-center my-auto py-1">
+                    <span className={clsx("font-black tracking-tight leading-none", inputMethod === 'dartboard' ? "text-3xl" : "text-5xl md:text-6xl", isActive ? "text-white" : "text-slate-300")}>{p.currentScore}</span>
                     {checkoutGuide && <span className="text-[10px] font-bold text-[#00f0a8] mt-1">{checkoutGuide}</span>}
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[10px] font-semibold">
@@ -366,9 +390,9 @@ export default function Play({ onMatchComplete }) {
             />
           </div>
         ) : (
-          <div className="flex flex-col justify-end w-full max-w-md mx-auto">
+          <div className="flex flex-col w-full max-w-md mx-auto shrink-0 pb-1">
             {/* Input display bar with Target icon, current typed score, Backspace and Check buttons */}
-            <div className="my-2 bg-[#121927] border border-white/10 rounded-2xl p-2 md:p-2.5 flex items-center justify-between shadow-inner relative h-14 md:h-16 shrink-0">
+            <div className="mb-2 bg-[#121927] border border-white/10 rounded-2xl p-2 md:p-2.5 flex items-center justify-between shadow-inner relative h-13 md:h-15 shrink-0">
               <div className="w-9 flex items-center justify-center text-slate-500">
                 <Target className="w-5 h-5 text-slate-400" />
               </div>
@@ -405,12 +429,12 @@ export default function Play({ onMatchComplete }) {
             </div>
 
             {/* 3x3 Keypad + Bottom Row [Bust, 0, +] */}
-            <div className="grid grid-cols-3 gap-2 mb-2 w-full">
+            <div className="grid grid-cols-3 gap-2 w-full">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                 <button 
                   key={num} 
                   onClick={() => handleKeypad(num.toString())}
-                  className="h-11 md:h-13 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer"
+                  className="h-12 md:h-14 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer"
                 >
                   {num}
                 </button>
@@ -418,19 +442,19 @@ export default function Play({ onMatchComplete }) {
               <button 
                 onClick={handleExplicitBust}
                 disabled={isSuddenDeath}
-                className="h-11 md:h-13 bg-rose-500/15 hover:bg-rose-500/25 disabled:opacity-25 disabled:cursor-not-allowed text-rose-400 font-extrabold text-base rounded-2xl active:scale-95 transition-all shadow-md border border-rose-500/25 flex items-center justify-center uppercase tracking-wider cursor-pointer"
+                className="h-12 md:h-14 bg-rose-500/15 hover:bg-rose-500/25 disabled:opacity-25 disabled:cursor-not-allowed text-rose-400 font-extrabold text-base rounded-2xl active:scale-95 transition-all shadow-md border border-rose-500/25 flex items-center justify-center uppercase tracking-wider cursor-pointer"
               >
                 Bust
               </button>
               <button 
                 onClick={() => handleKeypad('0')}
-                className="h-11 md:h-13 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer"
+                className="h-12 md:h-14 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer"
               >
                 0
               </button>
               <button 
                 onClick={() => handleKeypad('+')}
-                className="h-11 md:h-13 bg-[#00f0a8]/15 hover:bg-[#00f0a8]/25 text-[#00f0a8] font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-[#00f0a8]/25 flex items-center justify-center cursor-pointer"
+                className="h-12 md:h-14 bg-[#00f0a8]/15 hover:bg-[#00f0a8]/25 text-[#00f0a8] font-black text-2xl rounded-2xl active:scale-95 transition-all shadow-md border border-[#00f0a8]/25 flex items-center justify-center cursor-pointer"
               >
                 +
               </button>

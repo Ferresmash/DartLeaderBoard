@@ -17,11 +17,17 @@ const isMatchInGameMode = (match, filter) => {
   if (filter === 'killer') {
     return match.gameMode === 'killer' || match.startingScore === 'Killer';
   }
+  if (filter === 'cricket') {
+    return match.gameMode === 'cricket' || match.startingScore === 'Cricket';
+  }
+  if (filter === 'around_the_clock') {
+    return match.gameMode === 'around_the_clock' || match.startingScore === 'Around the Clock';
+  }
   if (filter === '301') {
-    return (match.startingScore === 301 || match.startingScore === '301') && match.gameMode !== 'killer';
+    return (match.startingScore === 301 || match.startingScore === '301') && match.gameMode !== 'killer' && match.gameMode !== 'cricket' && match.gameMode !== 'around_the_clock';
   }
   if (filter === '501') {
-    return (match.startingScore === 501 || match.startingScore === '501') && match.gameMode !== 'killer';
+    return (match.startingScore === 501 || match.startingScore === '501') && match.gameMode !== 'killer' && match.gameMode !== 'cricket' && match.gameMode !== 'around_the_clock';
   }
   return true;
 };
@@ -35,6 +41,8 @@ export default function Home({ players, matches }) {
   
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [selectedWeekStart, setSelectedWeekStart] = useState(null);
+
+  const isX01Match = (m) => m.gameMode === 'x01' || (!m.gameMode && m.startingScore !== 'Killer' && m.startingScore !== 'Cricket' && m.startingScore !== 'Around the Clock' && typeof m.startingScore === 'number');
 
   const leaderboard = useMemo(() => {
     const activeOfficeMatches = onlyInOffice ? matches.filter(isInOfficeMatch) : matches;
@@ -64,30 +72,36 @@ export default function Home({ players, matches }) {
 
       timeFilteredMatches.forEach(m => {
         if (!m.turns || !m.turns.length) return;
-        const playerTurns = m.turns.filter(t => t.playerId === p.id);
+        const playerTurns = m.turns.filter(t => t && t.playerId === p.id);
         if (playerTurns.length === 0) return;
 
-        const firstThree = playerTurns.slice(0, 3);
-        nineDartTotals.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
+        const validPTurns = playerTurns.filter(t => typeof t.score === 'number' && !isNaN(t.score));
+        if (validPTurns.length > 0) {
+          const firstThree = validPTurns.slice(0, 3);
+          nineDartTotals.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
+        }
 
-        let running = m.startingScore || 501;
+        const starting = typeof m.startingScore === 'number' ? m.startingScore : 501;
+        let running = starting;
         playerTurns.forEach(t => {
-          if (!t.isBust && t.score > computedBestScore) {
-            computedBestScore = t.score;
+          if (typeof t.score === 'number' && !isNaN(t.score)) {
+            if (!t.isBust && t.score > computedBestScore) {
+              computedBestScore = t.score;
+            }
+            if (t.isBust) {
+                bustCount++;
+            } else {
+                validThrows++;
+                totalThrowScore += t.score;
+                running -= t.score;
+                if (running === 0) {
+                  if (t.score > computedHighestCheckout) computedHighestCheckout = t.score;
+                  running = starting;
+                }
+                if (running < 0) running += t.score;
+            }
+            totalThrowsCount++;
           }
-          if (t.isBust) {
-              bustCount++;
-          } else {
-              validThrows++;
-              totalThrowScore += t.score;
-              running -= t.score;
-              if (running === 0) {
-                if (t.score > computedHighestCheckout) computedHighestCheckout = t.score;
-                running = m.startingScore || 501;
-              }
-              if (running < 0) running += t.score;
-          }
-          totalThrowsCount++;
         });
       });
 

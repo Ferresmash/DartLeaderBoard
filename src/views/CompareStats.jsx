@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, TrendingUp, Calendar, CheckCircle2, Trophy, Target, Zap } from 'lucide-react';
+import { Users, TrendingUp, Calendar, CheckCircle2, Trophy, Target, Zap, Skull, Flame } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import DartFlowHeader from '../components/DartFlowHeader';
 import { 
@@ -10,7 +10,7 @@ import {
   getThisWeekBounds 
 } from '../utils/dateUtils';
 
-export default function CompareStats({ players, matches }) {
+export default function CompareStats({ players = [], matches = [] }) {
   const navigate = useNavigate();
 
   const topPriority = ['ferdinand', 'ted', 'petrus', 'chanique'];
@@ -55,6 +55,15 @@ export default function CompareStats({ players, matches }) {
     });
     return sorted.map(p => p.id).slice(0, 2);
   });
+
+  // Ensure selected players sync once async players load
+  useEffect(() => {
+    if (selectedPlayerIds.length === 0 && sortedPlayers.length > 0) {
+      setSelectedPlayerIds(sortedPlayers.map(p => p.id).slice(0, 2));
+    }
+  }, [sortedPlayers, selectedPlayerIds.length]);
+
+  const [modeFilter, setModeFilter] = useState('x01'); // 'x01', 'killer', 'all'
   const [metric, setMetric] = useState('avgScore'); // avgScore, wins, winRate, highestCheckout, avgNineDarts, bustRate
   const [duration, setDuration] = useState('this_week'); // this_week, this_month, all_time
 
@@ -73,13 +82,40 @@ export default function CompareStats({ players, matches }) {
     return colors[idx >= 0 ? idx % colors.length : 0];
   };
 
+  // Filter matches based on selected game mode
+  const filteredMatches = useMemo(() => {
+    return matches.filter(m => {
+      const isKiller = m.gameMode === 'killer' || m.startingScore === 'Killer';
+      const isCricket = m.gameMode === 'cricket' || m.startingScore === 'Cricket';
+      const isAroundTheClock = m.gameMode === 'around_the_clock' || m.startingScore === 'Around the Clock';
+
+      if (modeFilter === 'x01') {
+        return !isKiller && !isCricket && !isAroundTheClock && (m.gameMode === 'x01' || !m.gameMode || typeof m.startingScore === 'number');
+      }
+      if (modeFilter === 'killer') {
+        return isKiller;
+      }
+      if (modeFilter === 'cricket') {
+        return isCricket;
+      }
+      return true; // 'all'
+    });
+  }, [matches, modeFilter]);
+
+  // Adjust metric if switching between modes
+  useEffect(() => {
+    if (modeFilter === 'killer' && metric !== 'wins' && metric !== 'winRate') {
+      setMetric('wins');
+    }
+  }, [modeFilter, metric]);
+
   // Comparative Head-to-Head Stats for Selected Players
   const headToHead = useMemo(() => {
     return selectedPlayerIds.map(pid => {
       const player = players.find(p => p.id === pid);
       if (!player) return null;
 
-      const playerMatches = matches.filter(m => 
+      const playerMatches = filteredMatches.filter(m => 
         (m.participantIds && m.participantIds.includes(pid)) || 
         m.winnerId === pid
       );
@@ -92,37 +128,38 @@ export default function CompareStats({ players, matches }) {
 
       playerMatches.forEach(m => {
         if (!m.turns) return;
-        const pTurns = m.turns.filter(t => t.playerId === pid);
-        let running = m.startingScore || 501;
+        const pTurns = m.turns.filter(t => t && t.playerId === pid);
+        const starting = typeof m.startingScore === 'number' ? m.startingScore : 501;
+        let running = starting;
 
         pTurns.forEach(t => {
-          if (!t.isBust) {
+          if (!t.isBust && typeof t.score === 'number' && !isNaN(t.score)) {
             validThrows++;
             totalScore += t.score;
             running -= t.score;
             if (running === 0) {
               legsWonCount++;
               if (t.score > highestCheckout) highestCheckout = t.score;
-              running = m.startingScore || 501;
+              running = starting;
             }
           }
         });
       });
 
-      const avg = validThrows > 0 ? (totalScore / validThrows).toFixed(1) : '0.0';
+      const avg = validThrows > 0 ? (totalScore / validThrows).toFixed(1) : (modeFilter === 'x01' ? '0.0' : '-');
 
       return {
         id: pid,
         name: player.name,
         color: getPlayerColor(pid),
         avg,
-        highestCheckout: highestCheckout || player.bestScore || 0,
+        highestCheckout: highestCheckout || (modeFilter === 'x01' ? (player.highestCheckout || 0) : '-'),
         wins,
         legsWon: legsWonCount || wins,
         gamesPlayed: playerMatches.length
       };
     }).filter(Boolean);
-  }, [selectedPlayerIds, players, matches]);
+  }, [selectedPlayerIds, players, filteredMatches, modeFilter]);
 
   const chartData = useMemo(() => {
     if (selectedPlayerIds.length === 0) return [];
@@ -155,7 +192,7 @@ export default function CompareStats({ players, matches }) {
 
     return periods.map(period => {
       const dataPoint = { name: period.name };
-      const periodMatches = matches.filter(m => m.timestamp >= period.start && m.timestamp < period.end);
+      const periodMatches = filteredMatches.filter(m => m.timestamp >= period.start && m.timestamp < period.end);
 
       selectedPlayerIds.forEach(pid => {
         const playerMatches = periodMatches.filter(m => 
@@ -178,23 +215,29 @@ export default function CompareStats({ players, matches }) {
 
           playerMatches.forEach(m => {
             if (!m.turns) return;
-            const pTurns = m.turns.filter(t => t.playerId === pid);
+            const pTurns = m.turns.filter(t => t && t.playerId === pid);
             if (pTurns.length === 0) return;
 
-            const firstThree = pTurns.slice(0, 3);
-            nineDartScores.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
+            const validPTurns = pTurns.filter(t => typeof t.score === 'number' && !isNaN(t.score));
+            if (validPTurns.length > 0) {
+              const firstThree = validPTurns.slice(0, 3);
+              nineDartScores.push(firstThree.reduce((acc, t) => acc + (t.isBust ? 0 : t.score), 0));
+            }
 
-            let currentTotal = m.startingScore || 501;
+            const starting = typeof m.startingScore === 'number' ? m.startingScore : 501;
+            let currentTotal = starting;
             pTurns.forEach(t => {
-              totalThrows++;
-              if (t.isBust) {
-                busts++;
-              } else {
-                validThrows++;
-                totalScore += t.score;
-                currentTotal -= t.score;
-                if (currentTotal === 0 && t.score > highOut) highOut = t.score;
-                if (currentTotal === 0) currentTotal = m.startingScore || 501;
+              if (typeof t.score === 'number' && !isNaN(t.score)) {
+                totalThrows++;
+                if (t.isBust) {
+                  busts++;
+                } else {
+                  validThrows++;
+                  totalScore += t.score;
+                  currentTotal -= t.score;
+                  if (currentTotal === 0 && t.score > highOut) highOut = t.score;
+                  if (currentTotal === 0) currentTotal = starting;
+                }
               }
             });
           });
@@ -207,7 +250,7 @@ export default function CompareStats({ players, matches }) {
       });
       return dataPoint;
     });
-  }, [selectedPlayerIds, metric, duration, matches]);
+  }, [selectedPlayerIds, metric, duration, filteredMatches]);
 
   const togglePlayer = (id) => {
     setSelectedPlayerIds(prev => 
@@ -217,71 +260,126 @@ export default function CompareStats({ players, matches }) {
     );
   };
 
-  const metricLabels = {
-    avgScore: 'Average Score',
-    wins: 'Total Wins',
-    winRate: 'Win Rate %',
-    highestCheckout: 'High Checkout',
-    avgNineDarts: 'Avg 9 Darts',
-    bustRate: 'Bust Rate %',
-  };
+  const metricLabels = useMemo(() => {
+    if (modeFilter === 'killer') {
+      return {
+        wins: 'Total Wins',
+        winRate: 'Win Rate %',
+      };
+    }
+    return {
+      avgScore: 'Average Score',
+      wins: 'Total Wins',
+      winRate: 'Win Rate %',
+      highestCheckout: 'High Checkout',
+      avgNineDarts: 'Avg 9 Darts',
+      bustRate: 'Bust Rate %',
+    };
+  }, [modeFilter]);
 
   return (
     <div className="min-h-[100dvh] bg-[#0a0e17] font-sans pb-28 md:pb-12 flex flex-col">
       <DartFlowHeader />
 
       <div className="max-w-4xl mx-auto w-full px-5 py-6 flex flex-col gap-6">
-        {/* Title */}
-        <header className="text-center md:text-left">
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white flex items-center justify-center md:justify-start gap-2.5">
-            <TrendingUp className="w-8 h-8 text-[#00f0a8]" />
-            <span>Match Stats</span>
-          </h1>
-          <p className="text-slate-400 text-sm mt-1 font-medium">Head-to-head performance comparison</p>
+        {/* Title & Mode Switcher */}
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-center sm:text-left">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white flex items-center justify-center sm:justify-start gap-2.5">
+              <TrendingUp className="w-8 h-8 text-[#00f0a8]" />
+              <span>Match Stats</span>
+            </h1>
+            <p className="text-slate-400 text-sm mt-1 font-medium">Head-to-head performance comparison</p>
+          </div>
+
+          {/* Game Mode Filter Pills */}
+          <div className="flex items-center justify-center sm:justify-end gap-1.5 bg-[#131b2a] border border-white/10 p-1 rounded-2xl shrink-0 self-center sm:self-auto">
+            <button
+              onClick={() => setModeFilter('x01')}
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                modeFilter === 'x01'
+                  ? 'bg-[#00f0a8] text-[#0a0e17] shadow-[0_0_12px_rgba(0,240,168,0.3)]'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Target className="w-3.5 h-3.5" />
+              <span>Classic X01</span>
+            </button>
+            <button
+              onClick={() => setModeFilter('killer')}
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                modeFilter === 'killer'
+                  ? 'bg-rose-500 text-white shadow-[0_0_12px_rgba(244,63,94,0.3)]'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Skull className="w-3.5 h-3.5" />
+              <span>Killer</span>
+            </button>
+            <button
+              onClick={() => setModeFilter('all')}
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                modeFilter === 'all'
+                  ? 'bg-white/15 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>All Modes</span>
+            </button>
+          </div>
         </header>
 
-        {/* Head-to-Head Comparative Cards (from Screen 3) */}
+        {/* Head-to-Head Comparative Cards */}
         {headToHead.length >= 2 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            {/* Player Average Comparison */}
+            {/* Player Average Comparison (for X01/All) or Win Rate (for Killer) */}
             <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 block">Player Avg</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 block">
+                {modeFilter === 'killer' ? 'Killer Matches Played' : 'Player Avg'}
+              </span>
               <div className="flex items-center justify-around gap-2">
                 {headToHead.slice(0, 2).map((p) => (
                   <div key={p.id} className="flex flex-col items-center">
                     <span className="text-xs font-bold text-slate-400 truncate max-w-[90px]">{p.name.split(' ')[0]}</span>
                     <span className="text-2xl md:text-3xl font-black mt-0.5" style={{ color: p.color }}>
-                      {p.avg}
+                      {modeFilter === 'killer' ? p.gamesPlayed : p.avg}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* High Checkouts Comparison */}
+            {/* High Checkouts Comparison (or Mode Wins) */}
             <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 block">High Checkouts</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 block">
+                {modeFilter === 'killer' ? 'Win Rate %' : 'High Checkouts'}
+              </span>
               <div className="flex items-center justify-around gap-2">
-                {headToHead.slice(0, 2).map((p) => (
-                  <div key={p.id} className="flex flex-col items-center">
-                    <span className="text-xs font-bold text-slate-400 truncate max-w-[90px]">{p.name.split(' ')[0]}</span>
-                    <span className="text-2xl md:text-3xl font-black mt-0.5" style={{ color: p.color }}>
-                      {p.highestCheckout}
-                    </span>
-                  </div>
-                ))}
+                {headToHead.slice(0, 2).map((p) => {
+                  const rate = p.gamesPlayed > 0 ? ((p.wins / p.gamesPlayed) * 100).toFixed(0) + '%' : '0%';
+                  return (
+                    <div key={p.id} className="flex flex-col items-center">
+                      <span className="text-xs font-bold text-slate-400 truncate max-w-[90px]">{p.name.split(' ')[0]}</span>
+                      <span className="text-2xl md:text-3xl font-black mt-0.5" style={{ color: p.color }}>
+                        {modeFilter === 'killer' ? rate : p.highestCheckout}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Legs Won Comparison */}
+            {/* Legs / Wins Comparison */}
             <div className="bg-[#131b2a] border border-white/[0.08] rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 block">Legs / Wins</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 block">
+                {modeFilter === 'killer' ? 'Killer Wins' : 'Legs / Wins'}
+              </span>
               <div className="flex items-center justify-around gap-2">
                 {headToHead.slice(0, 2).map((p) => (
                   <div key={p.id} className="flex flex-col items-center">
                     <span className="text-xs font-bold text-slate-400 truncate max-w-[90px]">{p.name.split(' ')[0]}</span>
                     <span className="text-2xl md:text-3xl font-black mt-0.5" style={{ color: p.color }}>
-                      {p.legsWon}
+                      {modeFilter === 'killer' ? p.wins : p.legsWon}
                     </span>
                   </div>
                 ))}
@@ -358,12 +456,14 @@ export default function CompareStats({ players, matches }) {
           </div>
         </div>
 
-        {/* Accuracy / Trend Glowing Neon Wave Chart (from Screen 3) */}
+        {/* Accuracy / Trend Glowing Neon Wave Chart */}
         <div className="bg-[#131b2a] border border-white/[0.08] p-5 md:p-6 rounded-3xl shadow-2xl flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-black text-white">{metricLabels[metric]} Accuracy Trend</h2>
-              <p className="text-slate-400 text-xs font-medium mt-0.5">Smooth comparison curves</p>
+              <h2 className="text-xl font-black text-white">{metricLabels[metric] || 'Metric'} Accuracy Trend</h2>
+              <p className="text-slate-400 text-xs font-medium mt-0.5">
+                {modeFilter === 'x01' ? 'Classic X01 match performance' : modeFilter === 'killer' ? 'Killer game performance' : 'All game modes combined'}
+              </p>
             </div>
           </div>
 
@@ -430,4 +530,3 @@ export default function CompareStats({ players, matches }) {
     </div>
   );
 }
-

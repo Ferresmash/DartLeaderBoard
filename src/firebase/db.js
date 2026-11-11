@@ -93,11 +93,20 @@ export const addWin = async (playerId) => {
 export const submitMatchData = async (winnerId, participantIds, bestScores, turns = [], startingScore = 501, gameMode = 'x01') => {
   const now = new Date();
   
+  let formattedStartingScore = startingScore;
+  if (gameMode === 'killer') {
+    formattedStartingScore = 'Killer';
+  } else if (gameMode === 'cricket') {
+    formattedStartingScore = 'Cricket';
+  } else if (gameMode === 'around_the_clock') {
+    formattedStartingScore = 'Around the Clock';
+  }
+
   const matchData = {
     winnerId: winnerId,
     participantIds: participantIds,
     turns: turns,
-    startingScore: gameMode === 'killer' ? 'Killer' : startingScore,
+    startingScore: formattedStartingScore,
     gameMode: gameMode,
     timestamp: now.getTime(),
     dateString: now.toISOString()
@@ -117,42 +126,55 @@ export const submitMatchData = async (winnerId, participantIds, bestScores, turn
       
       const dbP = dbPlayers[pId] || { totalWins: 0, gamesPlayed: 0, bestScore: 0, highestCheckout: 0 };
       
-      const newGamesPlayed = (dbP.gamesPlayed || dbP.totalWins || 0) + 1;
-      let newTotalWins = dbP.totalWins || 0;
-      let newBestScore = dbP.bestScore || 0;
-      let newHighestCheckout = dbP.highestCheckout || 0;
-      
-      if (pId === winnerId) {
-        newTotalWins += 1;
-      }
-      
-      // Update high score secretly if beaten
-      if (bestScores[pId] && bestScores[pId] > newBestScore) {
-        newBestScore = bestScores[pId];
-      }
+      if (gameMode === 'x01') {
+        const newGamesPlayed = (dbP.gamesPlayed || dbP.totalWins || 0) + 1;
+        let newTotalWins = dbP.totalWins || 0;
+        let newBestScore = dbP.bestScore || 0;
+        let newHighestCheckout = dbP.highestCheckout || 0;
+        
+        if (pId === winnerId) {
+          newTotalWins += 1;
+        }
+        
+        // Update high score secretly if beaten
+        if (bestScores && bestScores[pId] && bestScores[pId] > newBestScore) {
+          newBestScore = bestScores[pId];
+        }
 
-      // Check for Highest Checkout in this match (X01 games only)
-      if (gameMode !== 'killer' && turns && turns.length > 0 && typeof startingScore === 'number' && startingScore > 0) {
-        let currentTotal = startingScore;
-        const playerTurns = turns.filter(t => t && t.playerId === pId);
-        playerTurns.forEach(t => {
-           if (!t.isBust && typeof t.score === 'number') {
-              currentTotal -= t.score;
-              if (currentTotal === 0) {
-                 if (t.score > newHighestCheckout) {
-                    newHighestCheckout = t.score;
-                 }
-                 // Reset for next leg
-                 currentTotal = startingScore;
-              }
-           }
-        });
+        // Check for Highest Checkout in this match
+        if (turns && turns.length > 0 && typeof startingScore === 'number' && startingScore > 0) {
+          let currentTotal = startingScore;
+          const playerTurns = turns.filter(t => t && t.playerId === pId);
+          playerTurns.forEach(t => {
+             if (!t.isBust && typeof t.score === 'number') {
+                currentTotal -= t.score;
+                if (currentTotal === 0) {
+                   if (t.score > newHighestCheckout) {
+                      newHighestCheckout = t.score;
+                   }
+                   // Reset for next leg
+                   currentTotal = startingScore;
+                }
+             }
+          });
+        }
+        
+        updates[`/players/${pId}/gamesPlayed`] = newGamesPlayed;
+        updates[`/players/${pId}/totalWins`] = newTotalWins;
+        updates[`/players/${pId}/bestScore`] = newBestScore;
+        updates[`/players/${pId}/highestCheckout`] = newHighestCheckout;
+      } else {
+        // Track mode-specific stats so main X01 match stats are NOT polluted
+        const modeWinsKey = `${gameMode}Wins`;
+        const modeGamesKey = `${gameMode}GamesPlayed`;
+        const currentModeWins = dbP[modeWinsKey] || 0;
+        const currentModeGames = dbP[modeGamesKey] || 0;
+
+        updates[`/players/${pId}/${modeGamesKey}`] = currentModeGames + 1;
+        if (pId === winnerId) {
+          updates[`/players/${pId}/${modeWinsKey}`] = currentModeWins + 1;
+        }
       }
-      
-      updates[`/players/${pId}/gamesPlayed`] = newGamesPlayed;
-      updates[`/players/${pId}/totalWins`] = newTotalWins;
-      updates[`/players/${pId}/bestScore`] = newBestScore;
-      updates[`/players/${pId}/highestCheckout`] = newHighestCheckout;
     });
   }
   
