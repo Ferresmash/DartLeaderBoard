@@ -23,6 +23,9 @@ const isMatchInGameMode = (match, filter) => {
   if (filter === 'around_the_clock') {
     return match.gameMode === 'around_the_clock' || match.startingScore === 'Around the Clock';
   }
+  if (filter === 'x01') {
+    return match.gameMode === 'x01' || (!match.gameMode && match.startingScore !== 'Killer' && match.startingScore !== 'Cricket' && match.startingScore !== 'Around the Clock' && (typeof match.startingScore === 'number' || match.startingScore === 301 || match.startingScore === 501 || match.startingScore === '301' || match.startingScore === '501'));
+  }
   if (filter === '301') {
     return (match.startingScore === 301 || match.startingScore === '301') && match.gameMode !== 'killer' && match.gameMode !== 'cricket' && match.gameMode !== 'around_the_clock';
   }
@@ -37,7 +40,7 @@ export default function Home({ players, matches }) {
   const [timeSpan, setTimeSpan] = useState('this_week');
   const [statType, setStatType] = useState('wins');
   const [onlyInOffice, setOnlyInOffice] = useState(true);
-  const [gameModeFilter, setGameModeFilter] = useState('301');
+  const [gameModeFilter, setGameModeFilter] = useState('x01');
   
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [selectedWeekStart, setSelectedWeekStart] = useState(null);
@@ -241,9 +244,10 @@ export default function Home({ players, matches }) {
   };
 
   const gameModeLabels = {
-    '301': '301 Darts',
-    '501': '501 Darts',
+    'x01': 'Classic X01',
     'killer': 'Killer',
+    'cricket': 'Cricket',
+    'around_the_clock': 'Around the Clock',
     'all': 'All Modes'
   };
 
@@ -275,16 +279,17 @@ export default function Home({ players, matches }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-            {/* Game Mode Filter (Default: 301) */}
+            {/* Game Mode Filter (Default: X01) */}
             <div className="relative">
               <select 
                 value={gameModeFilter}
                 onChange={(e) => setGameModeFilter(e.target.value)}
                 className="appearance-none bg-[#0e1420] border border-white/10 hover:border-[#00f0a8]/40 text-[#00f0a8] px-3.5 py-2 pr-8 rounded-xl font-extrabold text-xs focus:outline-none focus:border-[#00f0a8] cursor-pointer transition-colors shadow-sm"
               >
-                <option value="301" className="bg-[#131b2a] text-white">Mode: 301</option>
-                <option value="501" className="bg-[#131b2a] text-white">Mode: 501</option>
+                <option value="x01" className="bg-[#131b2a] text-white">Mode: X01</option>
                 <option value="killer" className="bg-[#131b2a] text-white">Mode: Killer</option>
+                <option value="cricket" className="bg-[#131b2a] text-white">Mode: Cricket</option>
+                <option value="around_the_clock" className="bg-[#131b2a] text-white">Mode: Around the Clock</option>
                 <option value="all" className="bg-[#131b2a] text-white">All Modes</option>
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-[#00f0a8] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />

@@ -439,7 +439,7 @@ export default function Setup() {
               <div className="bg-[#0b171c] border border-cyan-500/25 rounded-2xl p-4 flex flex-col gap-2.5 text-xs text-cyan-200/90 leading-relaxed shadow-lg">
                 <div className="flex items-center gap-2 font-black text-cyan-300 uppercase tracking-wider text-sm">
                   <Compass className="w-4 h-4 text-cyan-400" />
-                  <span>Around the Clock ("Jorden Runt")</span>
+                  <span>Around the Clock</span>
                 </div>
                 <p>• Players start at <strong>Target 1</strong> and race sequentially through <strong>20, ending at Bull</strong>.</p>
                 <p>• <strong>Bonus Skips:</strong> Hitting a Double advances 2 targets (+2), Triple advances 3 (+3)!</p>

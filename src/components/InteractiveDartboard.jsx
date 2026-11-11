@@ -451,10 +451,10 @@ export default function InteractiveDartboard({
         <button
           onClick={handleMiss}
           disabled={darts.length >= 3}
-          className="py-3 bg-[#162030] hover:bg-[#1d2a3f] disabled:opacity-30 text-slate-300 hover:text-white font-bold text-xs rounded-xl border border-white/[0.06] active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer"
+          className="py-3 bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 disabled:opacity-30 text-rose-300 hover:text-white font-black text-xs rounded-xl border border-rose-500/25 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
         >
-          <X className="w-3.5 h-3.5" />
-          <span>Miss (0)</span>
+          <X className="w-4 h-4 stroke-[2.5]" />
+          <span>Miss / Off Board</span>
         </button>
 
         {mode !== 'killer' && (

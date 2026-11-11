@@ -370,16 +370,18 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
             Aim At
           </span>
           <div className="w-16 h-16 rounded-full bg-cyan-500/15 border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_25px_rgba(6,182,212,0.4)] my-1 animate-pulse">
-            <span className="text-3xl font-black text-white">{currentTargetLabel}</span>
+            <span className={clsx("font-black text-white", currentTargetLabel.length > 2 ? "text-2xl" : "text-3xl")}>
+              {currentTargetLabel}
+            </span>
           </div>
           <span className="text-xs text-slate-400 font-bold mt-1">
             Target {activePlayer.currentTargetIdx + 1} of {CLOCK_TARGETS.length}
           </span>
         </div>
 
-        {/* Visual Clock Progress Track Strip */}
-        <div className="bg-[#0f1522] border border-white/10 rounded-2xl p-2 shadow-inner overflow-hidden">
-          <div ref={trackRef} className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+        {/* Visual Clock Progress Track Strip (No clipping, padded container) */}
+        <div className="bg-[#0f1522] border border-white/10 rounded-2xl p-2.5 shadow-inner">
+          <div ref={trackRef} className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-2">
             {CLOCK_TARGETS.map((num, idx) => {
               const isPast = idx < activePlayer.currentTargetIdx;
               const isCurrent = idx === activePlayer.currentTargetIdx;
@@ -389,9 +391,9 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
                 <div
                   key={num}
                   className={clsx(
-                    "w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all border",
+                    "w-9 h-9 min-w-[36px] rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all border",
                     isCurrent
-                      ? "bg-cyan-500 text-slate-950 border-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.5)] scale-110"
+                      ? "bg-cyan-500 text-slate-950 border-cyan-300 ring-2 ring-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.6)] z-10"
                       : isPast
                         ? "bg-[#00f0a8]/15 border-[#00f0a8]/30 text-[#00f0a8]"
                         : "bg-[#162030] border-white/5 text-slate-500"
@@ -423,7 +425,7 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
             />
           </div>
         ) : (
-          <div className="flex flex-col gap-2 w-full max-w-md mx-auto shrink-0 pb-1">
+          <div className="flex flex-col gap-2.5 w-full max-w-md mx-auto shrink-0 pb-1">
             {/* Quick 1-Tap Advance Buttons */}
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -451,12 +453,12 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
               </button>
             </div>
 
-            {/* Miss Button */}
+            {/* Prominent Miss / Off Board Button */}
             <button
               onClick={() => registerDart(false, 0)}
-              className="py-3 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 font-black text-xs uppercase rounded-2xl active:scale-95 transition-all border border-rose-500/25 flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full py-4 bg-rose-500/20 hover:bg-rose-500/30 active:bg-rose-500/40 text-rose-300 font-black text-sm uppercase rounded-2xl active:scale-95 transition-all border border-rose-500/30 shadow-md flex items-center justify-center gap-2 cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5 stroke-[3]" />
               <span>Miss / Off Board (0)</span>
             </button>
           </div>

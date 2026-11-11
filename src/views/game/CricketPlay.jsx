@@ -470,23 +470,30 @@ export default function CricketPlay({ onMatchComplete }) {
             <div className="grid grid-cols-4 gap-2">
               {CRICKET_TARGETS.map(target => {
                 const label = CRICKET_TARGET_LABELS[target];
+                const isBull = target === 25;
                 return (
                   <button
                     key={target}
                     onClick={() => registerDart(target, multiplier)}
-                    className="py-3 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-base rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer"
+                    className={clsx(
+                      "py-3.5 bg-[#162030] hover:bg-[#1f2b42] text-white font-black text-base rounded-2xl active:scale-95 transition-all shadow-md border border-white/5 flex items-center justify-center cursor-pointer",
+                      isBull && "col-span-2 bg-[#1b253b] border-amber-500/30 text-amber-300 hover:bg-[#23304c]"
+                    )}
                   >
                     {label}
                   </button>
                 );
               })}
-              <button
-                onClick={() => registerDart(0, 0)}
-                className="py-3 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 font-black text-xs uppercase rounded-2xl active:scale-95 transition-all border border-rose-500/25 flex items-center justify-center cursor-pointer"
-              >
-                Miss (0)
-              </button>
             </div>
+
+            {/* Prominent Miss / Off Board Button */}
+            <button
+              onClick={() => registerDart(0, 0)}
+              className="w-full py-4 bg-rose-500/20 hover:bg-rose-500/30 active:bg-rose-500/40 text-rose-300 font-black text-sm uppercase rounded-2xl active:scale-95 transition-all border border-rose-500/30 shadow-md flex items-center justify-center gap-2 cursor-pointer mt-1"
+            >
+              <X className="w-5 h-5 stroke-[3]" />
+              <span>Miss / Off Board (0)</span>
+            </button>
           </div>
         )}
       </div>

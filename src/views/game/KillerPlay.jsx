@@ -721,15 +721,15 @@ export default function KillerPlay({ onMatchComplete }) {
           </div>
         </div>
 
-        {/* BOTTOM CONTROLS: Miss, Hit (with 1x/2x/3x selector), Undo */}
+        {/* BOTTOM CONTROLS: Miss / Off Board, Hit (with 1x/2x/3x selector), Undo */}
         <div className="flex items-center justify-between gap-2.5 pt-1 pb-1">
           <button
             onClick={() => handleHitSector(0, 0)}
             disabled={turnDarts.length >= 3}
-            className="px-4 py-3 bg-[#131b28] hover:bg-[#1a2538] active:bg-[#202b3d] disabled:opacity-25 rounded-2xl border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] transition-colors duration-75 touch-manipulation select-none"
+            className="px-4 py-3.5 bg-rose-500/20 hover:bg-rose-500/30 active:bg-rose-500/40 disabled:opacity-25 rounded-2xl border border-rose-500/30 text-rose-300 font-black text-xs md:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] transition-all duration-75 touch-manipulation select-none shrink-0"
           >
-            <X className="w-4 h-4 text-rose-400" />
-            <span>Miss</span>
+            <X className="w-4 h-4 stroke-[3] text-rose-400" />
+            <span>Miss / Off Board</span>
           </button>
 
           <button
@@ -742,7 +742,7 @@ export default function KillerPlay({ onMatchComplete }) {
             }}
             disabled={turnDarts.length >= 3}
             className={clsx(
-              "flex-1 py-3 px-3 rounded-2xl font-black text-xs md:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.98] transition-all duration-75 touch-manipulation select-none disabled:opacity-25",
+              "flex-1 py-3.5 px-3 rounded-2xl font-black text-xs md:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.98] transition-all duration-75 touch-manipulation select-none disabled:opacity-25",
               isEligibleToAttack
                 ? "bg-rose-500 hover:bg-rose-400 text-white shadow-rose-500/30 border border-rose-400"
                 : "bg-[#00f0a8] hover:bg-[#00d694] text-[#0a0e17] shadow-[#00f0a8]/30 border border-[#00f0a8]"
@@ -762,7 +762,7 @@ export default function KillerPlay({ onMatchComplete }) {
           <button
             onClick={handleUndo}
             disabled={historyStack.length === 0}
-            className="px-4 py-3 bg-[#131b28] hover:bg-[#1a2538] active:bg-[#202b3d] disabled:opacity-25 rounded-2xl border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer active:scale-[0.98] transition-colors duration-75 touch-manipulation select-none"
+            className="px-3.5 py-3.5 bg-[#131b28] hover:bg-[#1a2538] active:bg-[#202b3d] disabled:opacity-25 rounded-2xl border border-white/10 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer active:scale-[0.98] transition-colors duration-75 touch-manipulation select-none shrink-0"
             title="Undo"
           >
             <RotateCcw className="w-4 h-4" />
