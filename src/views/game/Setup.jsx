@@ -45,6 +45,7 @@ export default function Setup() {
   const isFourPlayers = playerList.length === 4;
   const currentDiffObj = KILLER_DIFFICULTIES.find(d => d.id === killerDifficulty) || KILLER_DIFFICULTIES[0];
   const slicesPerPlayer = currentDiffObj.slices;
+  const totalSlicesNeeded = playerList.length * slicesPerPlayer;
 
   // Killer board capacity checks
   const isOverfilled = isBoardOverfilled(playerList.length, slicesPerPlayer);
