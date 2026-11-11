@@ -63,6 +63,7 @@ export default function KillerPlay({ onMatchComplete }) {
   const [focusedOpponentId, setFocusedOpponentId] = useState(null);
   const [focusedSlice, setFocusedSlice] = useState(null);
   const [hitDialogSector, setHitDialogSector] = useState(null);
+  const [showOpponentPicker, setShowOpponentPicker] = useState(false);
 
   const autoAdvanceTimerRef = useRef(null);
 
@@ -109,15 +110,21 @@ export default function KillerPlay({ onMatchComplete }) {
     if (livingOpponents.length === 0) return [];
     if (focusedOpponentId) {
       const opp = livingOpponents.find(p => p.id === focusedOpponentId);
-      if (opp) return opp.assignedSlices;
+      if (opp) return opp.assignedSlices || [];
     }
-    return livingOpponents[0]?.assignedSlices || [];
+    // When only 1 living opponent, zoom in on that opponent
+    if (livingOpponents.length === 1) {
+      return livingOpponents[0]?.assignedSlices || [];
+    }
+    // When multiple opponents and no single opponent is focused, return all opponents' slices
+    return livingOpponents.flatMap(p => p.assignedSlices || []);
   }, [isEligibleToAttack, activePlayer, livingOpponents, focusedOpponentId, focusedSlice]);
 
   const targetedOpponent = useMemo(() => {
     if (!isEligibleToAttack) return null;
-    if (focusedOpponentId) return livingOpponents.find(p => p.id === focusedOpponentId) || livingOpponents[0];
-    return livingOpponents[0] || null;
+    if (focusedOpponentId) return livingOpponents.find(p => p.id === focusedOpponentId) || null;
+    if (livingOpponents.length === 1) return livingOpponents[0];
+    return null;
   }, [isEligibleToAttack, focusedOpponentId, livingOpponents]);
 
   const primaryTargetSector = useMemo(() => {
@@ -461,12 +468,19 @@ export default function KillerPlay({ onMatchComplete }) {
             const isActive = activeIdx === idx;
             const isEliminated = p.isEliminated;
             const themeColor = p.theme?.accentHex || '#00f0a8';
+            const isFocusedOpponent = isEligibleToAttack && focusedOpponentId === p.id;
 
             return (
               <div
                 key={p.id || idx}
                 onClick={() => {
-                  if (!isEliminated) setActiveIdx(idx);
+                  if (!isEliminated) {
+                    if (isEligibleToAttack && p.id !== activePlayer?.id) {
+                      setFocusedOpponentId(prev => prev === p.id ? null : p.id);
+                    } else if (!isEligibleToAttack && turnDarts.length === 0) {
+                      setActiveIdx(idx);
+                    }
+                  }
                 }}
                 className={clsx(
                   "flex-1 min-w-[85px] rounded-2xl p-2 flex flex-col items-center justify-between border-2 transition-colors duration-150 relative select-none",
@@ -474,7 +488,9 @@ export default function KillerPlay({ onMatchComplete }) {
                     ? "bg-[#0b1018]/60 border-white/5 opacity-35 grayscale"
                     : isActive
                       ? "bg-[#111928] shadow-[0_0_15px_rgba(0,240,168,0.25)] ring-1 ring-white/10 cursor-pointer"
-                      : "bg-[#0d1420] border-white/10 opacity-75 hover:opacity-100 cursor-pointer"
+                      : isFocusedOpponent
+                        ? "bg-[#25101a] border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.35)] ring-1 ring-rose-400 cursor-pointer"
+                        : "bg-[#0d1420] border-white/10 opacity-75 hover:opacity-100 cursor-pointer"
                 )}
                 style={{
                   borderColor: isEliminated ? 'rgba(255,255,255,0.05)' : isActive ? themeColor : 'rgba(255,255,255,0.1)'
@@ -607,8 +623,19 @@ export default function KillerPlay({ onMatchComplete }) {
             <span className="text-[10px] font-black uppercase text-rose-400 flex items-center gap-1 shrink-0">
               <Skull className="w-3 h-3 text-rose-500" /> Focus Target:
             </span>
+            <button
+              onClick={() => setFocusedOpponentId(null)}
+              className={clsx(
+                "px-2.5 py-1 rounded-xl text-xs font-black transition-all flex items-center gap-1 cursor-pointer border shrink-0",
+                focusedOpponentId === null
+                  ? "bg-rose-500/25 border-rose-500 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.3)] ring-1 ring-white/10"
+                  : "bg-[#101827] text-slate-400 border-white/10 hover:border-white/20 hover:text-white"
+              )}
+            >
+              <span>All Targets ({livingOpponents.flatMap(o => o.assignedSlices).join(',')})</span>
+            </button>
             {livingOpponents.map(opp => {
-              const isFocused = (focusedOpponentId || livingOpponents[0]?.id) === opp.id;
+              const isFocused = focusedOpponentId === opp.id;
               return (
                 <button
                   key={opp.id}
@@ -616,7 +643,7 @@ export default function KillerPlay({ onMatchComplete }) {
                   className={clsx(
                     "px-2.5 py-1 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer border shrink-0",
                     isFocused
-                      ? "bg-rose-500/20 border-rose-500 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.3)] scale-[1.03]"
+                      ? "bg-rose-500/25 border-rose-500 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.3)] ring-1 ring-white/10"
                       : "bg-[#101827] text-slate-400 border-white/10 hover:border-white/20 hover:text-white"
                   )}
                 >
@@ -706,8 +733,14 @@ export default function KillerPlay({ onMatchComplete }) {
           </button>
 
           <button
-            onClick={() => primaryTargetSector && setHitDialogSector(primaryTargetSector)}
-            disabled={turnDarts.length >= 3 || !primaryTargetSector}
+            onClick={() => {
+              if (primaryTargetSector) {
+                setHitDialogSector(primaryTargetSector);
+              } else if (isEligibleToAttack) {
+                setShowOpponentPicker(true);
+              }
+            }}
+            disabled={turnDarts.length >= 3}
             className={clsx(
               "flex-1 py-3 px-3 rounded-2xl font-black text-xs md:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.98] transition-all duration-75 touch-manipulation select-none disabled:opacity-25",
               isEligibleToAttack
@@ -718,7 +751,9 @@ export default function KillerPlay({ onMatchComplete }) {
             <Target className="w-4 h-4" />
             <span>
               {isEligibleToAttack 
-                ? `HIT [${targetedOpponent?.name?.split(' ')[0] || 'Target'}: ${primaryTargetSector}]`
+                ? targetedOpponent
+                  ? `HIT [${targetedOpponent?.name?.split(' ')[0]}: ${primaryTargetSector}]`
+                  : 'HIT OPPONENT'
                 : `HIT [Slice ${primaryTargetSector}]`
               }
             </span>
@@ -824,6 +859,78 @@ export default function KillerPlay({ onMatchComplete }) {
 
             <button
               onClick={() => setHitDialogSector(null)}
+              className="w-full py-2.5 text-center text-xs font-bold text-slate-400 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Target Opponent Picker Modal (when HIT is pressed while in All Opponents view) */}
+      {showOpponentPicker && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 animate-in fade-in duration-150"
+          onClick={() => setShowOpponentPicker(false)}
+        >
+          <div 
+            className="bg-[#121927] border border-white/15 rounded-3xl p-5 max-w-sm w-full shadow-2xl animate-in slide-in-from-bottom-4 duration-200 select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
+              <div className="flex items-center gap-2">
+                <Skull className="w-5 h-5 text-rose-500" />
+                <div>
+                  <h3 className="text-sm font-black text-white leading-tight">
+                    Select Target Opponent
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Which opponent did you hit?
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowOpponentPicker(false)}
+                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2 mb-3">
+              {livingOpponents.map(opp => (
+                <button
+                  key={opp.id}
+                  onClick={() => {
+                    setShowOpponentPicker(false);
+                    setHitDialogSector(opp.assignedSlices[0]);
+                  }}
+                  className="p-3 rounded-2xl bg-[#162030] hover:bg-[#1f2b42] border border-white/10 hover:border-rose-500 flex items-center justify-between transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div 
+                      className="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs text-white"
+                      style={{ backgroundColor: `${opp.theme?.accentHex || '#f43f5e'}30`, border: `2px solid ${opp.theme?.accentHex || '#f43f5e'}` }}
+                    >
+                      {opp.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="text-sm font-black text-white">{opp.name}</span>
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        {opp.assignedSlices.length > 1 ? `Slices: ${opp.assignedSlices.join(', ')}` : `Slice: ${opp.assignedSlices[0]}`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-bold text-rose-400">
+                    <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    <span>{opp.hearts}/3</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowOpponentPicker(false)}
               className="w-full py-2.5 text-center text-xs font-bold text-slate-400 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
             >
               Cancel

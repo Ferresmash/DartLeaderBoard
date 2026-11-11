@@ -86,9 +86,19 @@ export default function KillerBoard({
       }
     });
 
-    if (count === 0 || (Math.abs(sumX) < 0.05 && Math.abs(sumY) < 0.05)) {
-      // Symmetrically distributed across entire board
-      return 'translate(0px, 0px) scale(1.15)';
+    if (count === 0) {
+      return 'translate(0px, 0px) scale(1)';
+    }
+
+    // Check dispersion: if multiple slices are spread around different sides of the board,
+    // do not zoom in on one direction; keep full board visible so all targets can be seen!
+    const vectorLength = Math.sqrt(sumX * sumX + sumY * sumY) / count;
+    if (count > 1 && vectorLength < 0.75) {
+      return 'translate(0px, 0px) scale(1)';
+    }
+
+    if (Math.abs(sumX) < 0.05 && Math.abs(sumY) < 0.05) {
+      return 'translate(0px, 0px) scale(1)';
     }
 
     const midAngle = Math.atan2(sumY, sumX);
