@@ -39,10 +39,17 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
 
   const [activeIdx, setActiveIdx] = useState(isNewGame ? 0 : savedGame?.activeIdx || 0);
   const [turnDarts, setTurnDarts] = useState(isNewGame ? [] : savedGame?.turnDarts || []);
-  const [historyStack, setHistoryStack] = useState(isNewGame ? [] : savedGame?.historyStack || []);
+  const [historyStack, setHistoryStack] = useState([]);
   const [turnHistory, setTurnHistory] = useState(isNewGame ? [] : savedGame?.turnHistory || []);
   const [inputMethod, setInputMethod] = useState(() => localStorage.getItem('atc_input_method') || 'keypad');
   const [bonusSkips, setBonusSkips] = useState(true); // Double = +2, Triple = +3
+
+  const [currentRound, setCurrentRound] = useState(isNewGame ? 1 : savedGame?.currentRound || 1);
+  const [winConfirm, setWinConfirm] = useState(null); // Confirmation modal for winning hit: { isHit, multiplier, dartLabel }
+  const [isSuddenDeath, setIsSuddenDeath] = useState(isNewGame ? false : savedGame?.isSuddenDeath || false);
+  const [suddenDeathScores, setSuddenDeathScores] = useState(isNewGame ? {} : savedGame?.suddenDeathScores || {});
+  const [suddenDeathPlayers, setSuddenDeathPlayers] = useState(isNewGame ? [] : savedGame?.suddenDeathPlayers || []);
+  const [roundStatusBanner, setRoundStatusBanner] = useState(null);
 
   const [winner, setWinner] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,18 +60,25 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
   const autoAdvanceTimerRef = useRef(null);
   const trackRef = useRef(null);
 
-  // Persist game state
+  // Persist game state safely without historyStack to prevent QuotaExceededError
   useEffect(() => {
     if (players.length > 0 && !isSaving && !winner) {
-      localStorage.setItem('activeAroundTheClockGame', JSON.stringify({
-        players,
-        activeIdx,
-        turnDarts,
-        historyStack,
-        turnHistory
-      }));
+      try {
+        localStorage.setItem('activeAroundTheClockGame', JSON.stringify({
+          players,
+          activeIdx,
+          turnDarts,
+          turnHistory,
+          currentRound,
+          isSuddenDeath,
+          suddenDeathScores,
+          suddenDeathPlayers
+        }));
+      } catch (err) {
+        console.warn('ATC localStorage save warning:', err);
+      }
     }
-  }, [players, activeIdx, turnDarts, historyStack, turnHistory, isSaving, winner]);
+  }, [players, activeIdx, turnDarts, turnHistory, currentRound, isSuddenDeath, suddenDeathScores, suddenDeathPlayers, isSaving, winner]);
 
   // Cleanup timer
   useEffect(() => {
@@ -112,7 +126,43 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
     }
   };
 
-  const advanceToNextPlayer = (updatedPlayers, currentIdx, completedDarts) => {
+  const evaluateRoundEnd = (updatedPlayers, roundNum) => {
+    const finished = updatedPlayers.filter(p => p.isFinished);
+    if (finished.length === 0) return;
+
+    if (finished.length === 1) {
+      const matchWinner = finished[0];
+      setWinner(matchWinner);
+      setPlayers(updatedPlayers);
+      handleMatchWin(matchWinner, updatedPlayers);
+      return;
+    }
+
+    // Multiple players finished in this round! Compare total darts taken (fewest darts wins)
+    const minDarts = Math.min(...finished.map(p => p.finishedTotalDarts || p.totalDarts));
+    const tiedFewest = finished.filter(p => (p.finishedTotalDarts || p.totalDarts) === minDarts);
+
+    if (tiedFewest.length === 1) {
+      const matchWinner = tiedFewest[0];
+      setWinner(matchWinner);
+      setPlayers(updatedPlayers);
+      handleMatchWin(matchWinner, updatedPlayers);
+      return;
+    }
+
+    // Exact tie on darts! Start Sudden Death Bull-Off (3 darts at Bullseye)
+    setIsSuddenDeath(true);
+    const sdIndices = tiedFewest.map(w => updatedPlayers.findIndex(p => p.id === w.id));
+    setSuddenDeathPlayers(sdIndices);
+    setSuddenDeathScores({});
+    setActiveIdx(sdIndices[0]);
+    setTurnDarts([]);
+    setRoundStatusBanner('⚡ Tied in Darts! SUDDEN DEATH BULL-OFF ⚡');
+    setToastMessage('⚡ SUDDEN DEATH BULL-OFF ⚡');
+  };
+
+  const advanceToNextPlayer = (updatedPlayers, currentIdx, completedDarts, customSDScores = null) => {
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
     const nextPlayers = JSON.parse(JSON.stringify(updatedPlayers));
     const curr = nextPlayers[currentIdx];
 
@@ -127,49 +177,234 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
       }
     ]);
 
-    const nextIdx = (currentIdx + 1) % nextPlayers.length;
+    const activeScores = customSDScores || suddenDeathScores;
+
+    if (isSuddenDeath) {
+      const isSDRoundEnd = currentIdx === suddenDeathPlayers[suddenDeathPlayers.length - 1];
+      if (isSDRoundEnd) {
+        let maxSD = -1;
+        let sdWinners = [];
+        suddenDeathPlayers.forEach(pIdx => {
+          const s = activeScores[pIdx] || 0;
+          if (s > maxSD) {
+            maxSD = s;
+            sdWinners = [pIdx];
+          } else if (s === maxSD && s !== -1) {
+            sdWinners.push(pIdx);
+          }
+        });
+
+        if (sdWinners.length === 1) {
+          const sdWinner = nextPlayers[sdWinners[0]];
+          setWinner(sdWinner);
+          setPlayers(nextPlayers);
+          handleMatchWin(sdWinner, nextPlayers);
+          return;
+        } else if (sdWinners.length > 1) {
+          // Still tied, start next sudden death round
+          setSuddenDeathScores({});
+          setSuddenDeathPlayers(sdWinners);
+          setActiveIdx(sdWinners[0]);
+          setTurnDarts([]);
+          setToastMessage('⚡ Still Tied! Next Sudden Death Round ⚡');
+          return;
+        }
+      }
+
+      const currPos = suddenDeathPlayers.indexOf(currentIdx);
+      const nextSDIdx = suddenDeathPlayers[(currPos + 1) % suddenDeathPlayers.length];
+      setActiveIdx(nextSDIdx);
+      setTurnDarts([]);
+      setPlayers(nextPlayers);
+      return;
+    }
+
+    const isRoundEnd = currentIdx === nextPlayers.length - 1;
+
+    if (isRoundEnd) {
+      // Check if any player finished in this round
+      const finished = nextPlayers.filter(p => p.isFinished);
+      if (finished.length > 0) {
+        evaluateRoundEnd(nextPlayers, currentRound);
+        return;
+      }
+      setCurrentRound(r => r + 1);
+      setRoundStatusBanner(null);
+    }
+
+    // Skip any players who are already finished
+    let nextIdx = (currentIdx + 1) % nextPlayers.length;
+    while (nextPlayers[nextIdx]?.isFinished && nextPlayers.some(p => !p.isFinished)) {
+      nextIdx = (nextIdx + 1) % nextPlayers.length;
+    }
+
     setActiveIdx(nextIdx);
     setTurnDarts([]);
     setPlayers(nextPlayers);
   };
 
-  const registerDart = (isHit, multiplier = 1, dartLabel = null) => {
-    if (turnDarts.length >= 3 || winner || isSaving) return;
+  const applyConfirmedFinalDart = (isHit, multiplier, dartLabel) => {
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
 
-    // Snapshot for Undo
     const snapshot = {
       players: JSON.parse(JSON.stringify(players)),
       activeIdx,
       turnDarts: [...turnDarts],
-      turnHistory: [...turnHistory]
+      currentRound,
+      isSuddenDeath: false,
+      suddenDeathScores: {},
+      suddenDeathPlayers: []
     };
-    setHistoryStack(prev => [...prev, snapshot]);
+    setHistoryStack(prev => [...prev.slice(-9), snapshot]);
 
     const updatedPlayers = JSON.parse(JSON.stringify(players));
     const curr = updatedPlayers[activeIdx];
-
     curr.totalDarts = (curr.totalDarts || 0) + 1;
+    curr.hits = (curr.hits || 0) + 1;
+    curr.currentTargetIdx = CLOCK_TARGETS.length; // 21 (Completed clock)
+    curr.isFinished = true;
+    curr.finishedTotalDarts = curr.totalDarts;
+    curr.finishedAtRound = currentRound;
+
+    const recordedDart = {
+      isHit: true,
+      multiplier,
+      label: dartLabel || 'Bull',
+      desc: 'BULLSEYE! Clock Finished!'
+    };
+
+    const newTurnDarts = [...turnDarts, recordedDart];
+    setTurnDarts(newTurnDarts);
+    setPlayers(updatedPlayers);
+    setToastMessage('BULLSEYE! Finished!');
+
+    const isRoundEnd = activeIdx === updatedPlayers.length - 1;
+
+    if (!isRoundEnd) {
+      // Other player(s) in this round still get their equal turn to finish!
+      setRoundStatusBanner(`🎯 ${curr.name} finished! Other players get this round to match!`);
+      const nextIdx = (activeIdx + 1) % updatedPlayers.length;
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        setTurnHistory(prev => [
+          ...prev,
+          {
+            playerId: curr.id,
+            playerName: curr.name,
+            darts: [...newTurnDarts],
+            timestamp: Date.now()
+          }
+        ]);
+        setActiveIdx(nextIdx);
+        setTurnDarts([]);
+      }, 1000);
+      return;
+    }
+
+    // Round complete! Evaluate final standings
+    autoAdvanceTimerRef.current = setTimeout(() => {
+      setTurnHistory(prev => [
+        ...prev,
+        {
+          playerId: curr.id,
+          playerName: curr.name,
+          darts: [...newTurnDarts],
+          timestamp: Date.now()
+        }
+      ]);
+      evaluateRoundEnd(updatedPlayers, currentRound);
+    }, 600);
+  };
+
+  const registerSuddenDeathDart = (pts, label) => {
+    if (turnDarts.length >= 3 || winner || isSaving) return;
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+
+    const snapshot = {
+      players: JSON.parse(JSON.stringify(players)),
+      activeIdx,
+      turnDarts: [...turnDarts],
+      currentRound,
+      isSuddenDeath: true,
+      suddenDeathScores: { ...suddenDeathScores },
+      suddenDeathPlayers: [...suddenDeathPlayers]
+    };
+    setHistoryStack(prev => [...prev.slice(-9), snapshot]);
+
+    const newScores = {
+      ...suddenDeathScores,
+      [activeIdx]: (suddenDeathScores[activeIdx] || 0) + pts
+    };
+    setSuddenDeathScores(newScores);
+
+    const recordedDart = {
+      isHit: pts > 0,
+      multiplier: pts,
+      label,
+      desc: pts > 0 ? `BULL +${pts}` : 'Miss'
+    };
+
+    const newTurnDarts = [...turnDarts, recordedDart];
+    setTurnDarts(newTurnDarts);
+    setToastMessage(recordedDart.desc);
+    setTimeout(() => setToastMessage(null), 1000);
+
+    if (newTurnDarts.length === 3) {
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        advanceToNextPlayer(players, activeIdx, newTurnDarts, newScores);
+      }, 700);
+    }
+  };
+
+  const registerDart = (isHit, multiplier = 1, dartLabel = null) => {
+    if (turnDarts.length >= 3 || winner || isSaving) return;
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+
+    if (isSuddenDeath) {
+      const pts = isHit ? multiplier : 0;
+      registerSuddenDeathDart(pts, dartLabel || (isHit ? (multiplier === 2 ? 'D-Bull (2)' : 'Bull (1)') : 'Miss'));
+      return;
+    }
+
+    const curr = players[activeIdx];
+    if (isHit) {
+      const advanceBy = bonusSkips ? Math.min(multiplier, 3) : 1;
+      const targetAfterHit = (curr?.currentTargetIdx || 0) + advanceBy;
+
+      if (targetAfterHit >= CLOCK_TARGETS.length) {
+        // Winning hit on final target! Prompt confirmation first (no accidental wins)
+        setWinConfirm({ isHit, multiplier, dartLabel });
+        return;
+      }
+    }
+
+    // Normal dart registration
+    const snapshot = {
+      players: JSON.parse(JSON.stringify(players)),
+      activeIdx,
+      turnDarts: [...turnDarts],
+      currentRound,
+      isSuddenDeath: false,
+      suddenDeathScores: {},
+      suddenDeathPlayers: []
+    };
+    setHistoryStack(prev => [...prev.slice(-9), snapshot]);
+
+    const updatedPlayers = JSON.parse(JSON.stringify(players));
+    const p = updatedPlayers[activeIdx];
+
+    p.totalDarts = (p.totalDarts || 0) + 1;
     let desc = 'Miss';
     let label = 'Miss';
 
     if (isHit) {
-      curr.hits = (curr.hits || 0) + 1;
+      p.hits = (p.hits || 0) + 1;
       const advanceBy = bonusSkips ? Math.min(multiplier, 3) : 1;
-      const prevTargetLabel = CLOCK_TARGET_LABELS[CLOCK_TARGETS[curr.currentTargetIdx]];
+      const prevTargetLabel = CLOCK_TARGET_LABELS[CLOCK_TARGETS[p.currentTargetIdx]];
       const prefix = multiplier === 3 ? 'T' : multiplier === 2 ? 'D' : 'S';
 
       label = dartLabel || `${prefix}${prevTargetLabel}`;
       desc = `HIT ${label}! (+${advanceBy})`;
-
-      curr.currentTargetIdx += advanceBy;
-
-      // Check win condition (reached or exceeded total targets)
-      if (curr.currentTargetIdx >= CLOCK_TARGETS.length) {
-        setWinner(curr);
-        setPlayers(updatedPlayers);
-        handleMatchWin(curr, updatedPlayers);
-        return;
-      }
+      p.currentTargetIdx += advanceBy;
     }
 
     const recordedDart = {
@@ -195,13 +430,23 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
   };
 
   const handleDartboardHit = (recordedDart) => {
-    // Check if recorded dart hit current target
-    const currentTargetVal = CLOCK_TARGETS[activePlayer.currentTargetIdx];
+    if (isSuddenDeath) {
+      if (recordedDart.value === 50 || recordedDart.score === 50 || (recordedDart.value === 25 && recordedDart.multiplier === 2)) {
+        registerSuddenDeathDart(2, 'D-Bull (2)');
+      } else if (recordedDart.value === 25 || recordedDart.score === 25) {
+        registerSuddenDeathDart(1, 'Bull (1)');
+      } else {
+        registerSuddenDeathDart(0, 'Miss');
+      }
+      return;
+    }
+
+    const currentTargetVal = CLOCK_TARGETS[activePlayer?.currentTargetIdx || 0];
     let isMatch = false;
 
     if (currentTargetVal === 25) {
       // Bull target
-      if (recordedDart.value === 25 || recordedDart.score === 50) {
+      if (recordedDart.value === 25 || recordedDart.score === 50 || recordedDart.value === 50) {
         isMatch = true;
       }
     } else {
@@ -221,9 +466,14 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
     setPlayers(lastSnap.players);
     setActiveIdx(lastSnap.activeIdx);
     setTurnDarts(lastSnap.turnDarts);
-    setTurnHistory(lastSnap.turnHistory);
+    if (lastSnap.currentRound !== undefined) setCurrentRound(lastSnap.currentRound);
+    if (lastSnap.isSuddenDeath !== undefined) setIsSuddenDeath(lastSnap.isSuddenDeath);
+    if (lastSnap.suddenDeathScores !== undefined) setSuddenDeathScores(lastSnap.suddenDeathScores);
+    if (lastSnap.suddenDeathPlayers !== undefined) setSuddenDeathPlayers(lastSnap.suddenDeathPlayers);
     setHistoryStack(prev => prev.slice(0, -1));
     setWinner(null);
+    setWinConfirm(null);
+    setRoundStatusBanner(null);
     setToastMessage('Undone');
     setTimeout(() => setToastMessage(null), 1000);
   };
@@ -270,7 +520,15 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
         showBack
         onBack={() => setShowExitModal(true)}
         rightAction={
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className={clsx(
+              "text-xs font-black px-2.5 py-1 rounded-xl border",
+              isSuddenDeath
+                ? "bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse"
+                : "bg-cyan-500/15 text-cyan-300 border-cyan-500/30"
+            )}>
+              {isSuddenDeath ? '⚡ Sudden Death' : `Round ${currentRound}`}
+            </span>
             <button
               onClick={handleUndo}
               disabled={historyStack.length === 0}
@@ -288,6 +546,13 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
           </div>
         }
       />
+
+      {/* Round Status Banner (when a player finished and other has this round to catch up) */}
+      {roundStatusBanner && (
+        <div className="bg-gradient-to-r from-cyan-950 via-teal-900 to-cyan-950 border-b border-cyan-500/40 py-1.5 px-4 text-center text-xs font-black text-cyan-200 tracking-wide animate-in fade-in">
+          {roundStatusBanner}
+        </div>
+      )}
 
       <div className="flex-1 w-full max-w-lg mx-auto px-4 py-2 flex flex-col justify-between overflow-hidden gap-2">
         {/* Players Strip */}
@@ -317,15 +582,28 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
                     <span className={clsx("w-4 h-4 rounded-md font-black text-[10px] flex items-center justify-center shrink-0", theme.badgeBg, theme.badgeText)}>
                       {idx + 1}
                     </span>
-                    <span className="font-extrabold text-white text-xs truncate">{p.name.split(' ')[0]}</span>
+                    <span className="font-extrabold text-white text-xs truncate">{(p.name || 'Player').split(' ')[0]}</span>
                   </div>
-                  <span className="text-[10px] font-mono text-slate-400">{progressPct}%</span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    {p.isFinished ? 'DONE' : `${progressPct}%`}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between my-1">
                   <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase">Target</span>
-                    <span className="text-2xl font-black text-cyan-300 leading-none">{pTarget}</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">
+                      {isSuddenDeath ? 'SD Points' : p.isFinished ? 'Status' : 'Target'}
+                    </span>
+                    <span className={clsx(
+                      "font-black leading-none",
+                      p.isFinished ? "text-xs text-[#00f0a8]" : "text-2xl text-cyan-300"
+                    )}>
+                      {isSuddenDeath 
+                        ? `${suddenDeathScores[idx] || 0} pts`
+                        : p.isFinished 
+                          ? `✓ Done (${p.finishedTotalDarts || p.totalDarts} darts)`
+                          : pTarget}
+                    </span>
                   </div>
 
                   {/* Turn Darts Indicator */}
@@ -364,18 +642,40 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
         </div>
 
         {/* Big Active Target Spotlight */}
-        <div className="bg-[#121927] border border-cyan-500/30 rounded-3xl p-3 flex flex-col items-center justify-center shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 via-teal-400 to-cyan-500" />
-          <span className="text-[10px] font-black tracking-widest uppercase text-cyan-400 mb-0.5">
-            Aim At
+        <div className={clsx(
+          "border rounded-3xl p-3 flex flex-col items-center justify-center shadow-lg relative overflow-hidden",
+          isSuddenDeath
+            ? "bg-[#221017] border-rose-500/40"
+            : "bg-[#121927] border-cyan-500/30"
+        )}>
+          <div className={clsx(
+            "absolute top-0 left-0 right-0 h-1",
+            isSuddenDeath
+              ? "bg-gradient-to-r from-rose-500 via-amber-400 to-rose-500"
+              : "bg-gradient-to-r from-cyan-500 via-teal-400 to-cyan-500"
+          )} />
+          <span className={clsx(
+            "text-[10px] font-black tracking-widest uppercase mb-0.5",
+            isSuddenDeath ? "text-rose-400" : "text-cyan-400"
+          )}>
+            {isSuddenDeath ? '⚡ Sudden Death Bull-Off ⚡' : 'Aim At'}
           </span>
-          <div className="w-16 h-16 rounded-full bg-cyan-500/15 border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_25px_rgba(6,182,212,0.4)] my-1 animate-pulse">
-            <span className={clsx("font-black text-white", currentTargetLabel.length > 2 ? "text-2xl" : "text-3xl")}>
-              {currentTargetLabel}
+          <div className={clsx(
+            "w-16 h-16 rounded-full flex items-center justify-center my-1 animate-pulse border-2 shadow-lg",
+            isSuddenDeath
+              ? "bg-rose-500/20 border-rose-400 shadow-[0_0_25px_rgba(244,63,94,0.4)] text-rose-300"
+              : "bg-cyan-500/15 border-cyan-400 shadow-[0_0_25px_rgba(6,182,212,0.4)] text-white"
+          )}>
+            <span className={clsx("font-black", isSuddenDeath ? "text-xl text-rose-200" : (currentTargetLabel.length > 2 ? "text-2xl text-white" : "text-3xl text-white"))}>
+              {isSuddenDeath ? 'BULL' : currentTargetLabel}
             </span>
           </div>
           <span className="text-xs text-slate-400 font-bold mt-1">
-            Target {activePlayer.currentTargetIdx + 1} of {CLOCK_TARGETS.length}
+            {isSuddenDeath 
+              ? 'Most Bull points in 3 darts wins!' 
+              : activePlayer?.isFinished 
+                ? 'Target Complete! Waiting for round end.'
+                : `Target ${(activePlayer?.currentTargetIdx || 0) + 1} of ${CLOCK_TARGETS.length}`}
           </span>
         </div>
 
@@ -383,8 +683,8 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
         <div className="bg-[#0f1522] border border-white/10 rounded-2xl p-2.5 shadow-inner">
           <div ref={trackRef} className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-2">
             {CLOCK_TARGETS.map((num, idx) => {
-              const isPast = idx < activePlayer.currentTargetIdx;
-              const isCurrent = idx === activePlayer.currentTargetIdx;
+              const isPast = idx < (activePlayer?.currentTargetIdx || 0);
+              const isCurrent = idx === (activePlayer?.currentTargetIdx || 0);
               const label = CLOCK_TARGET_LABELS[num];
 
               return (
@@ -421,41 +721,67 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
               onDartRecorded={handleDartboardHit}
               onScoreSubmit={() => {}}
               onBust={() => registerDart(false, 0)}
-              activePlayerName={activePlayer.name}
+              activePlayerName={activePlayer?.name || 'Player'}
             />
           </div>
         ) : (
           <div className="flex flex-col gap-2.5 w-full max-w-md mx-auto shrink-0 pb-1">
-            {/* Quick 1-Tap Advance Buttons */}
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => registerDart(true, 1)}
-                className="py-3.5 bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 text-slate-950 font-black text-sm rounded-2xl active:scale-95 transition-all shadow-lg shadow-cyan-500/20 flex flex-col items-center justify-center cursor-pointer"
-              >
-                <span>HIT (Single)</span>
-                <span className="text-[10px] opacity-80">+1 Target</span>
-              </button>
+            {/* Sudden Death or Normal Quick 1-Tap Advance Buttons */}
+            {isSuddenDeath ? (
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => registerSuddenDeathDart(2, 'D-Bull (2)')}
+                  className="py-3.5 bg-gradient-to-r from-rose-600 to-red-500 hover:from-rose-500 hover:to-red-400 text-white font-black text-sm rounded-2xl active:scale-95 transition-all shadow-lg shadow-rose-500/25 flex flex-col items-center justify-center cursor-pointer"
+                >
+                  <span>Double Bull</span>
+                  <span className="text-[10px] opacity-80">+2 Pts</span>
+                </button>
+                <button
+                  onClick={() => registerSuddenDeathDart(1, 'Bull (1)')}
+                  className="py-3.5 bg-[#162030] hover:bg-[#1f2b42] text-amber-300 font-black text-sm rounded-2xl active:scale-95 transition-all border border-amber-500/30 flex flex-col items-center justify-center cursor-pointer shadow-md"
+                >
+                  <span>Outer Bull</span>
+                  <span className="text-[10px] text-amber-400/80">+1 Pt</span>
+                </button>
+                <button
+                  onClick={() => registerSuddenDeathDart(0, 'Miss')}
+                  className="py-3.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 font-black text-sm rounded-2xl active:scale-95 transition-all border border-rose-500/25 flex flex-col items-center justify-center cursor-pointer"
+                >
+                  <span>Miss</span>
+                  <span className="text-[10px] text-rose-400/80">0 Pts</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => registerDart(true, 1)}
+                  className="py-3.5 bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 text-slate-950 font-black text-sm rounded-2xl active:scale-95 transition-all shadow-lg shadow-cyan-500/20 flex flex-col items-center justify-center cursor-pointer"
+                >
+                  <span>HIT (Single)</span>
+                  <span className="text-[10px] opacity-80">+1 Target</span>
+                </button>
 
-              <button
-                onClick={() => registerDart(true, 2)}
-                className="py-3.5 bg-[#162030] hover:bg-[#1f2b42] text-cyan-300 font-black text-sm rounded-2xl active:scale-95 transition-all border border-cyan-500/30 flex flex-col items-center justify-center cursor-pointer shadow-md"
-              >
-                <span>Double</span>
-                <span className="text-[10px] text-cyan-400/80">{bonusSkips ? '+2 Targets' : '+1 Target'}</span>
-              </button>
+                <button
+                  onClick={() => registerDart(true, 2)}
+                  className="py-3.5 bg-[#162030] hover:bg-[#1f2b42] text-cyan-300 font-black text-sm rounded-2xl active:scale-95 transition-all border border-cyan-500/30 flex flex-col items-center justify-center cursor-pointer shadow-md"
+                >
+                  <span>Double</span>
+                  <span className="text-[10px] text-cyan-400/80">{bonusSkips ? '+2 Targets' : '+1 Target'}</span>
+                </button>
 
-              <button
-                onClick={() => registerDart(true, 3)}
-                className="py-3.5 bg-[#162030] hover:bg-[#1f2b42] text-amber-300 font-black text-sm rounded-2xl active:scale-95 transition-all border border-amber-500/30 flex flex-col items-center justify-center cursor-pointer shadow-md"
-              >
-                <span>Triple</span>
-                <span className="text-[10px] text-amber-400/80">{bonusSkips ? '+3 Targets' : '+1 Target'}</span>
-              </button>
-            </div>
+                <button
+                  onClick={() => registerDart(true, 3)}
+                  className="py-3.5 bg-[#162030] hover:bg-[#1f2b42] text-amber-300 font-black text-sm rounded-2xl active:scale-95 transition-all border border-amber-500/30 flex flex-col items-center justify-center cursor-pointer shadow-md"
+                >
+                  <span>Triple</span>
+                  <span className="text-[10px] text-amber-400/80">{bonusSkips ? '+3 Targets' : '+1 Target'}</span>
+                </button>
+              </div>
+            )}
 
             {/* Prominent Miss / Off Board Button */}
             <button
-              onClick={() => registerDart(false, 0)}
+              onClick={() => isSuddenDeath ? registerSuddenDeathDart(0, 'Miss') : registerDart(false, 0)}
               className="w-full py-4 bg-rose-500/20 hover:bg-rose-500/30 active:bg-rose-500/40 text-rose-300 font-black text-sm uppercase rounded-2xl active:scale-95 transition-all border border-rose-500/30 shadow-md flex items-center justify-center gap-2 cursor-pointer"
             >
               <X className="w-5 h-5 stroke-[3]" />
@@ -464,6 +790,39 @@ export default function AroundTheClockPlay({ onMatchComplete }) {
           </div>
         )}
       </div>
+
+      {/* Winning Target Confirmation Modal (Ensures no accidental wins & equal turns) */}
+      {winConfirm && (
+        <div className="fixed inset-0 z-[200] bg-[#0a0e17]/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-[#121927] border border-cyan-500/30 rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-full bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center mx-auto mb-4 shadow-[0_0_25px_rgba(6,182,212,0.4)]">
+              <Compass className="w-8 h-8 text-cyan-300" />
+            </div>
+            <h2 className="text-2xl font-black text-white mb-2">Did {activePlayer?.name} hit Bull?</h2>
+            <p className="text-xs text-slate-300 mb-6 font-medium">
+              Confirm winning target to complete the clock. All players get an equal turn this round!
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  const { isHit, multiplier, dartLabel } = winConfirm;
+                  setWinConfirm(null);
+                  applyConfirmedFinalDart(isHit, multiplier, dartLabel);
+                }}
+                className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black py-4 rounded-xl cursor-pointer shadow-lg shadow-cyan-500/30 active:scale-95 transition-all"
+              >
+                Yes, Won!
+              </button>
+              <button
+                onClick={() => setWinConfirm(null)}
+                className="flex-1 bg-[#1b2537] hover:bg-[#25334a] text-white font-black py-4 rounded-xl cursor-pointer active:scale-95 transition-all"
+              >
+                No, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettingsModal && (
